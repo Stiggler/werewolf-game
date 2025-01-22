@@ -322,3 +322,5 @@ def api_initialize_game():
 if __name__ == '__main__':
     init_db()  # Datenbank initialisieren
     app.run(debug=True)
+
+dsfdskfhsdnfsdlvfnslkjdn
