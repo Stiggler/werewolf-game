@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Startseite</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        h1 {
+            text-align: center;
+        }
+        .container {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 20px;
+        }
+        .left, .right {
+            width: 48%;
+        }
+        ul {
+            list-style-type: none;
+            padding: 0;
+        }
+        li {
+            margin: 10px 0;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background-color: #f9f9f9;
+        }
+        img {
+            width: 70px;
+            height: 70px;
+            border-radius: 5px;
+            margin-right: 10px;
+        }
+        button {
+            padding: 5px 10px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        .disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <h1>Willkommen zur Spielvorbereitung</h1>
+
+    <div class="container">
+        <!-- Linke Seite: Neuen Spieler hinzufügen und Playerpool -->
+        <div class="left">
+            <!-- Spieler hinzufügen -->
+            <h2>Neuen Spieler hinzufügen</h2>
+            <form id="addPlayerForm" onsubmit="addPlayer(event)">
+                <input type="text" id="playerName" placeholder="Spielername" required />
+                <input type="file" id="playerImage" accept="image/*" />
+                <button type="submit">Hinzufügen</button>
+            </form>
+
+            <!-- Spieler aus dem Playerpool hinzufügen oder entfernen -->
+            <h2>Spieler aus dem Playerpool hinzufügen oder entfernen</h2>
+            <ul id="poolList"></ul>
+        </div>
+
+        <!-- Rechte Seite: Spielerliste (aktives Spiel) -->
+        <div class="right">
+            <h2>Spielerliste (aktives Spiel)</h2>
+            <ul id="playerList"></ul>
+            <button id="confirmButton" class="disabled" onclick="confirmPlayers()" disabled>Bestätigen und zur Rollenverteilung</button>
+        </div>
+    </div>
+
+    <script>
+        async function fetchPlayerPool() {
+            const response = await fetch('/playerpool');
+            const players = await response.json();
+
+            const poolList = document.getElementById('poolList');
+            poolList.innerHTML = '';
+            players.forEach(player => {
+                const li = document.createElement('li');
+
+                const img = document.createElement('img');
+                img.src = `/${player.image || 'static/platzhalter.png'}`;
+                img.alt = player.name;
+
+                const span = document.createElement('span');
+                span.textContent = player.name;
+
+                const addButton = document.createElement('button');
+                addButton.textContent = 'Zum Spiel hinzufügen';
+                addButton.onclick = async () => {
+                    const res = await fetch('/add_to_players', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ id: player.id })
+                    });
+
+                    if (res.ok) {
+                        alert('Spieler hinzugefügt!');
+                        fetchPlayers();
+                    } else {
+                        const error = await res.json();
+                        alert(`Fehler beim Hinzufügen des Spielers: ${error.error}`);
+                    }
+                };
+
+                const removeButton = document.createElement('button');
+                removeButton.textContent = 'Entfernen';
+                removeButton.onclick = async () => {
+                    const res = await fetch('/remove_from_pool', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ id: player.id })
+                    });
+
+                    if (res.ok) {
+                        alert('Spieler entfernt!');
+                        fetchPlayerPool();
+                    } else {
+                        const error = await res.json();
+                        alert(`Fehler beim Entfernen des Spielers: ${error.error}`);
+                    }
+                };
+
+                li.appendChild(img);
+                li.appendChild(span);
+                li.appendChild(addButton);
+                li.appendChild(removeButton);
+                poolList.appendChild(li);
+            });
+        }
+
+        async function fetchPlayers() {
+            const response = await fetch('/players');
+            const players = await response.json();
+
+            const playerList = document.getElementById('playerList');
+            const confirmButton = document.getElementById('confirmButton');
+            playerList.innerHTML = '';
+
+            players.forEach((player, index) => {
+                const li = document.createElement('li');
+
+                const img = document.createElement('img');
+                img.src = `/${player.image || 'static/platzhalter.png'}`;
+                img.alt = player.name;
+
+                const span = document.createElement('span');
+                span.textContent = `${index + 1}. ${player.name}`;
+
+                const removeButton = document.createElement('button');
+                removeButton.textContent = 'Entfernen';
+                removeButton.onclick = async () => {
+                    const res = await fetch('/remove_from_players', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ id: player.id })
+                    });
+
+                    if (res.ok) {
+                        fetchPlayers();
+                    } else {
+                        const error = await res.json();
+                        alert(`Fehler beim Entfernen: ${error.error}`);
+                    }
+                };
+
+                li.appendChild(img);
+                li.appendChild(span);
+                li.appendChild(removeButton);
+                playerList.appendChild(li);
+            });
+
+            // Aktivieren oder Deaktivieren des Bestätigungs-Buttons
+            confirmButton.disabled = players.length === 0;
+            confirmButton.classList.toggle('disabled', players.length === 0);
+        }
+
+        async function addPlayer(event) {
+            event.preventDefault();
+            const name = document.getElementById('playerName').value;
+            const image = document.getElementById('playerImage').files[0];
+
+            const formData = new FormData();
+            formData.append('name', name);
+            if (image) {
+                formData.append('image', image);
+            }
+
+            const response = await fetch('/add_to_pool', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (response.ok) {
+                alert('Spieler hinzugefügt!');
+                fetchPlayerPool();
+            } else {
+                const error = await response.json();
+                alert(`Fehler beim Hinzufügen des Spielers: ${error.error}`);
+            }
+
+            document.getElementById('addPlayerForm').reset();
+        }
+
+        function confirmPlayers() {
+            window.location.href = '/select_roles';
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchPlayerPool();
+            fetchPlayers();
+        });
+    </script>
+</body>
+</html>

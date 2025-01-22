@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spielübersicht</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        h1 {
+            text-align: center;
+        }
+        .container {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        .left, .right {
+            flex: 1 1 48%;
+            min-width: 300px;
+        }
+        ul {
+            list-style-type: none;
+            padding: 0;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 10px;
+        }
+        li {
+            text-align: center;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+        }
+        img {
+            width: 100%;
+            max-width: 120px;
+            height: auto;
+            margin-bottom: 10px;
+        }
+        span {
+            display: block;
+            font-size: 14px;
+            word-wrap: break-word;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            display: block;
+            margin: 20px auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>Spielübersicht</h1>
+    <div class="container">
+        <!-- Spieler links -->
+        <div class="left">
+            <h2>Spieler</h2>
+            <ul id="playerList"></ul>
+        </div>
+        <!-- Rollen rechts -->
+        <div class="right">
+            <h2>Rollen</h2>
+            <ul id="roleList"></ul>
+        </div>
+    </div>
+    <button onclick="goToRoleDistribution()">Zurück zur Rollenverteilung</button>
+    <button onclick="startGame()">Spiel starten</button>
+
+    <script>
+        async function fetchOverviewData() {
+            const playersResponse = await fetch('/players');
+            const rolesResponse = await fetch('/get_selected_roles');
+            const players = await playersResponse.json();
+            const roles = await rolesResponse.json();
+
+            const playerList = document.getElementById('playerList');
+            const roleList = document.getElementById('roleList');
+
+            players.forEach(player => {
+                const li = document.createElement('li');
+
+                const img = document.createElement('img');
+                img.src = `/${player.image || 'static/platzhalter.png'}`;
+                img.alt = player.name;
+
+                const span = document.createElement('span');
+                span.textContent = player.name;
+
+                li.appendChild(img);
+                li.appendChild(span);
+                playerList.appendChild(li);
+            });
+
+            roles.forEach(role => {
+                const li = document.createElement('li');
+
+                const img = document.createElement('img');
+                img.src = `/static/rollen/${role.role_name.toLowerCase().replace(/ /g, '_')}.png`;
+                img.alt = role.role_name;
+
+                const span = document.createElement('span');
+                span.textContent = role.role_name;
+
+                li.appendChild(img);
+                li.appendChild(span);
+                roleList.appendChild(li);
+            });
+        }
+
+        function startGame() {
+    fetch('/reset_roles', {
+        method: 'POST'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.error) {
+            alert(data.error);
+        } else {
+            alert(data.message);
+            window.location.href = '/game'; // Weiterleitung zur Spielseite
+        }
+    })
+    .catch(error => console.error("Fehler beim Zurücksetzen der Rollen:", error));
+}
+
+
+        function goToRoleDistribution() {
+            window.location.href = '/select_roles'; // Leitet zurück zur Rollenverteilung
+        }
+
+        document.addEventListener('DOMContentLoaded', fetchOverviewData);
+    </script>
+</body>
+</html>

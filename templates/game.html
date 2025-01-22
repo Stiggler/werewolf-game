@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spiel - Rollen zuweisen</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        h1 {
+            text-align: center;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            padding: 10px;
+            text-align: left;
+            border: 1px solid #ccc;
+        }
+        th {
+            background-color: #f4f4f4;
+        }
+        select {
+            width: 100%;
+            padding: 5px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 20px auto;
+            display: block;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Rollen Zuweisen</h1>
+        <table>
+            <thead>
+                <tr>
+                    <th>Rolle</th>
+                    <th>Spieler</th>
+                </tr>
+            </thead>
+            <tbody id="roleTableBody">
+                <!-- Dynamische Inhalte -->
+            </tbody>
+        </table>
+        <button onclick="submitAssignments()">Zuweisungen Bestätigen</button>
+    </div>
+
+    <script>
+        let roles = [];
+        let players = [];
+
+        // Daten initial laden
+        async function loadData() {
+            try {
+                const [rolesResponse, playersResponse] = await Promise.all([
+                    fetch('/get_sorted_roles').then(res => res.json()),
+                    fetch('/players').then(res => res.json())
+                ]);
+                roles = rolesResponse;
+                players = playersResponse;
+                renderRolesAndPlayers();
+            } catch (error) {
+                console.error("Fehler beim Laden der Daten:", error);
+            }
+        }
+
+        // Tabelle rendern
+        function renderRolesAndPlayers() {
+    const tableBody = document.getElementById('roleTableBody');
+    tableBody.innerHTML = '';
+
+    roles.forEach(role => {
+        const row = document.createElement('tr');
+
+        // Rolle und Instanz-ID anzeigen
+        const roleCell = document.createElement('td');
+        roleCell.textContent = `${role.role_name} (Instanz ${role.instance_id})`;
+        row.appendChild(roleCell);
+
+        // Dropdown für Spieler
+        const playerCell = document.createElement('td');
+        const dropdown = document.createElement('select');
+        dropdown.dataset.roleName = role.role_name;
+        dropdown.dataset.instanceId = role.instance_id;
+        dropdown.innerHTML = '<option value="">Spieler auswählen</option>';
+
+        players.forEach(player => {
+            const option = document.createElement('option');
+            option.value = player.id;
+            option.textContent = player.name;
+
+            // Vorauswahl, wenn Spieler diese Rolle bereits hat
+            if (player.role === role.role_name && player.instance_id === role.instance_id) {
+                option.selected = true;
+            }
+
+            dropdown.appendChild(option);
+        });
+
+        dropdown.onchange = () =>
+            assignRole(role.role_name, role.instance_id, dropdown.value);
+        playerCell.appendChild(dropdown);
+        row.appendChild(playerCell);
+
+        tableBody.appendChild(row);
+    });
+}
+
+
+
+        // Rolle zuweisen
+        function assignRole(roleName, instanceId, playerId) {
+    fetch('/assign_role', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ player_id: playerId, role_name: roleName, instance_id: instanceId })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.error) {
+            alert(data.error);
+        } else {
+            alert(data.message);
+            loadData(); // Ansicht aktualisieren
+        }
+    })
+    .catch(error => console.error("Fehler beim Zuweisen der Rolle:", error));
+}
+
+function updatePlayerRole(roleName, playerId) {
+    // Aktualisiere die Spielerrolle lokal
+    players = players.map(player => {
+        if (player.id == playerId) {
+            return { ...player, role: roleName };
+        }
+        return player;
+    });
+
+    // Render die Tabelle neu, damit die Dropdowns aktualisiert werden
+    renderRolesAndPlayers();
+}
+
+
+
+        // Zuweisungen bestätigen
+        function submitAssignments() {
+            alert("Alle Zuweisungen bestätigt!");
+            window.location.href = "/gameoverview";
+        }
+
+        // Daten laden bei Seitenaufruf
+        document.addEventListener('DOMContentLoaded', loadData);
+    </script>
+</body>
+</html>
