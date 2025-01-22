@@ -33,6 +33,14 @@ def init_db():
                 instance_id INTEGER
             )
         """)
+                # Thief cards Tabelle
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS thief_cards (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                role_name TEXT NOT NULL
+            )
+        """)
+
     print("Database initialized!")
 
 # Verbindung zur Datenbank abrufen
@@ -151,43 +159,50 @@ def save_roles():
             return jsonify({"error": "Keine Rollen ausgewählt"}), 400
 
         with get_db_connection() as conn:
-            conn.execute("DELETE FROM game_roles")  # Bestehende Rollen löschen
+            conn.execute("DELETE FROM game_roles")
 
-            # Dictionary zur Verfolgung der Häufigkeit bestimmter Rollen
+            # Generiere die role_instances mit den richtigen Logiken
             role_instances = []
-            role_count_map = {}
+            instance_id = 1
+            processed_roles = []
 
             for role in roles:
-                if role not in role_count_map:
-                    role_count_map[role] = 0
+                if role == "Die Zwei Schwestern" and role not in processed_roles:
+                    # Füge "Die Zwei Schwestern" zweimal hinzu
+                    role_instances.append((role, instance_id))
+                    instance_id += 1
+                    role_instances.append((role, instance_id))
+                    instance_id += 1
+                    processed_roles.append(role)
+                elif role == "Die Drei Brüder" and role not in processed_roles:
+                    # Füge "Die Drei Brüder" dreimal hinzu
+                    role_instances.append((role, instance_id))
+                    instance_id += 1
+                    role_instances.append((role, instance_id))
+                    instance_id += 1
+                    role_instances.append((role, instance_id))
+                    instance_id += 1
+                    processed_roles.append(role)
+                elif role not in ["Die Zwei Schwestern", "Die Drei Brüder"]:
+                    # Füge alle anderen Rollen einmal hinzu
+                    role_instances.append((role, instance_id))
+                    instance_id += 1
 
-                if role == "Die Zwei Schwestern":
-                    if role_count_map[role] == 0:  # Nur beim ersten Durchlauf hinzufügen
-                        role_instances.append((role, 1))
-                        role_instances.append((role, 2))
-                        role_count_map[role] += 2
-                elif role == "Die Drei Brüder":
-                    if role_count_map[role] == 0:  # Nur beim ersten Durchlauf hinzufügen
-                        role_instances.append((role, 1))
-                        role_instances.append((role, 2))
-                        role_instances.append((role, 3))
-                        role_count_map[role] += 3
-                else:
-                    # Für alle anderen Rollen normale Verarbeitung
-                    role_count_map[role] += 1
-                    role_instances.append((role, role_count_map[role]))
-
-            # Einfügen in die Datenbank
+            # Speichere die Rollen in der Datenbank
             conn.executemany(
                 "INSERT INTO game_roles (role_name, instance_id) VALUES (?, ?)",
                 role_instances
             )
             conn.commit()
-
         return jsonify({"message": "Rollen erfolgreich gespeichert"}), 200
     except Exception as e:
         print(f"Fehler beim Speichern der Rollen: {e}")
         return jsonify({"error": "Fehler beim Speichern der Rollen"}), 500
+
+
+
+
+
 
 
 
@@ -215,7 +230,87 @@ def player_count():
 # Spielübersichtsseite
 @app.route('/gameoverview', methods=['GET'])
 def gameoverview():
-    return render_template('gameoverview.html')
+    with get_db_connection() as conn:
+        roles = conn.execute("""
+            SELECT role_name, COUNT(instance_id) as count
+            FROM game_roles
+            GROUP BY role_name
+        """).fetchall()
+        players = conn.execute("SELECT * FROM players").fetchall()
+
+    return render_template('gameoverview.html', roles=roles, players=players)
+
+
+@app.route('/random_assign_roles', methods=['POST'])
+def random_assign_roles():
+    try:
+        with get_db_connection() as conn:
+            # Spieler und Rollen abrufen
+            players = conn.execute("SELECT id FROM players").fetchall()
+            roles = conn.execute("SELECT role_name, instance_id FROM game_roles").fetchall()
+
+            # Tabelle thief_cards leeren
+            conn.execute("DELETE FROM thief_cards")
+
+            # Diebeskarten extrahieren
+            import random
+            random.shuffle(roles)
+            thief_cards = roles[:2]
+            remaining_roles = roles[2:]
+
+            # Diebeskarten speichern
+            conn.executemany(
+                "INSERT INTO thief_cards (role_name) VALUES (?)",
+                [(card['role_name'],) for card in thief_cards]
+            )
+
+            # Rollen zufällig Spielern zuweisen
+            random.shuffle(players)
+            assignments = []
+            for player, role in zip(players, remaining_roles):
+                assignments.append((role['role_name'], player['id']))
+
+            conn.executemany(
+                "UPDATE players SET role = ? WHERE id = ?",
+                assignments
+            )
+            conn.commit()
+        return jsonify({"message": "Rollen erfolgreich zugewiesen"}), 200
+    except Exception as e:
+        print(f"Fehler bei der zufälligen Rollenverteilung: {e}")
+        return jsonify({"error": "Fehler bei der zufälligen Rollenverteilung"}), 500
+
+
+@app.route('/get_thief_cards', methods=['GET'])
+def get_thief_cards():
+    with get_db_connection() as conn:
+        thief_cards = conn.execute("SELECT role_name FROM thief_cards").fetchall()
+    return jsonify({"cards": [{"role_name": card["role_name"]} for card in thief_cards]})
+
+@app.route('/manual_start', methods=['POST'])
+def manual_start():
+    return jsonify({"message": "Manueller Startmodus ist noch nicht implementiert"})
+
+@app.route('/game', methods=['GET'])
+def game():
+    try:
+        with get_db_connection() as conn:
+            # Spieler mit ihren Rollen abrufen
+            players = conn.execute("SELECT name, image, role FROM players").fetchall()
+            # Verfügbare Diebeskarten abrufen
+            thief_cards = conn.execute("SELECT role_name FROM thief_cards").fetchall()
+
+        # Daten an die Vorlage weitergeben
+        return render_template(
+            'game.html',
+            players=[{"name": p["name"], "image": p["image"], "role": p["role"]} for p in players],
+            thief_cards=[{"role_name": t["role_name"]} for t in thief_cards]
+        )
+    except Exception as e:
+        print(f"Fehler in der /game-Route: {e}")
+        return "Ein Fehler ist aufgetreten.", 500
+
+
 
 if __name__ == '__main__':
     init_db()  # Datenbank initialisieren
