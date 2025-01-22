@@ -72,48 +72,55 @@
         </div>
     </div>
     <button onclick="goToRoleDistribution()">Zurück zur Rollenverteilung</button>
-    <button onclick="startGame()">Spiel starten</button>
+    <button onclick="startRandomGame()">Spiel starten (Zufällige Rollenzuweisung)</button>
+    <button onclick="startManualGame()">Spiel starten (Manuelle Rollenzuweisung)</button>
 
     <script>
-        async function fetchOverviewData() {
-            const playersResponse = await fetch('/players');
-            const rolesResponse = await fetch('/get_selected_roles');
-            const players = await playersResponse.json();
-            const roles = await rolesResponse.json();
+async function fetchOverviewData() {
+    const playersResponse = await fetch('/players');
+    const rolesResponse = await fetch('/get_selected_roles');
+    const players = await playersResponse.json();
+    const roles = await rolesResponse.json();
 
-            const playerList = document.getElementById('playerList');
-            const roleList = document.getElementById('roleList');
+    const playerList = document.getElementById('playerList');
+    const roleList = document.getElementById('roleList');
 
-            players.forEach(player => {
-                const li = document.createElement('li');
+    // Spieler anzeigen
+    playerList.innerHTML = '';
+    players.forEach(player => {
+        const li = document.createElement('li');
 
-                const img = document.createElement('img');
-                img.src = `/${player.image || 'static/platzhalter.png'}`;
-                img.alt = player.name;
+        const img = document.createElement('img');
+        img.src = `/${player.image || 'static/platzhalter.png'}`;
+        img.alt = player.name;
 
-                const span = document.createElement('span');
-                span.textContent = player.name;
+        const span = document.createElement('span');
+        span.textContent = player.name;
 
-                li.appendChild(img);
-                li.appendChild(span);
-                playerList.appendChild(li);
-            });
+        li.appendChild(img);
+        li.appendChild(span);
+        playerList.appendChild(li);
+    });
 
-            roles.forEach(role => {
-                const li = document.createElement('li');
+    // Rollen anzeigen
+    roleList.innerHTML = '';
+    roles.forEach(role => {
+        const li = document.createElement('li');
 
-                const img = document.createElement('img');
-                img.src = `/static/rollen/${role.role_name.toLowerCase().replace(/ /g, '_')}.png`;
-                img.alt = role.role_name;
+        const img = document.createElement('img');
+        img.src = `/static/rollen/${role.role_name.toLowerCase().replace(/ /g, '_')}.png`;
+        img.alt = role.role_name;
 
-                const span = document.createElement('span');
-                span.textContent = role.role_name;
+        const span = document.createElement('span');
+        span.textContent = `${role.role_name} (${role.count})`;
 
-                li.appendChild(img);
-                li.appendChild(span);
-                roleList.appendChild(li);
-            });
-        }
+        li.appendChild(img);
+        li.appendChild(span);
+        roleList.appendChild(li);
+    });
+}
+
+
 
         function startGame() {
     fetch('/reset_roles', {
@@ -137,6 +144,22 @@
         }
 
         document.addEventListener('DOMContentLoaded', fetchOverviewData);
+
+        function startRandomGame() {
+        fetch('/random_assign_roles', { method: 'POST' })
+            .then(response => response.json())
+            .then(data => {
+                if (data.message) {
+                    alert(data.message);
+                    window.location.href = '/game'; // Weiterleitung zur Spielseite
+                }
+            });
+    }
+
+    function startManualGame() {
+        alert('Manuelle Rollenzuweisung ist noch nicht implementiert!');
+    }
+
     </script>
 </body>
 </html>
