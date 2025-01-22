@@ -7,44 +7,41 @@
     <style>
         body {
             font-family: Arial, sans-serif;
-            margin: 20px;
+            margin: 10px;
         }
         h1 {
             text-align: center;
+            font-size: 1.8em;
         }
         .container {
             display: flex;
             justify-content: space-between;
             gap: 20px;
         }
-        .fraktion {
-            margin-bottom: 20px;
+        .fraktion, .selected {
+            flex: 1 1 40%;
+            max-width: 40%;
         }
         ul {
             list-style-type: none;
             padding: 0;
-            max-height: 400px;
-            overflow-y: auto;
             display: grid;
-            grid-template-columns: repeat(2, 1fr);
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
             gap: 10px;
         }
         li {
-            margin: 5px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
             padding: 10px;
             border: 1px solid #ccc;
             border-radius: 5px;
-            display: flex;
-            align-items: center;
             background-color: #f9f9f9;
         }
-        li.added {
-            background-color: #d4edda;
-        }
-        img {
-            width: 50px;
-            height: 50px;
-            margin-right: 10px;
+        li img {
+            width: 70px;
+            height: 70px;
+            margin-bottom: 10px;
             border-radius: 5px;
         }
         button {
@@ -61,204 +58,181 @@
             font-weight: bold;
             margin: 10px 0;
         }
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            margin: 10px 0;
+        }
+        @media (max-width: 768px) {
+            .fraktion, .selected {
+                flex: 1 1 100%;
+                max-width: 100%;
+            }
+            ul {
+                grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            }
+        }
     </style>
 </head>
 <body>
     <h1>Rollen auswählen</h1>
 
     <div class="container">
-        <div id="rolesByFaction">
+        <div id="rolesByFaction" class="fraktion">
             <!-- Dynamische Inhalte nach Fraktionen -->
         </div>
 
-        <div>
-            <h2>Rollen im Spiel</h2>
-            <div id="selectedRolesByFaction">
-                <!-- Dynamische Inhalte der gewählten Rollen nach Fraktionen -->
-            </div>
+        <div id="selectedRolesByFaction" class="selected">
+            <h2>Ausgewählte Rollen</h2>
+            <!-- Dynamische Inhalte der gewählten Rollen -->
         </div>
     </div>
 
     <div class="counter" id="counter">Ausgewählte Rollen: 0 / 10</div>
-    <button onclick="confirmRoles()">Rollen bestätigen</button>
-    <button onclick="goBack()">Zurück zur Spielerauswahl</button>
+    <div class="controls">
+        <button onclick="goBack()">Zurück zur Spielerauswahl</button>
+        <button onclick="confirmRoles()">Rollen bestätigen</button>
+    </div>
 
     <script>
+        let selectedRoles = [];
+        let maxRoles = 0; // Wird dynamisch gesetzt
+    
         async function fetchRoles() {
+            const response = await fetch('/static/rollen/roles.json');
+            const roles = await response.json();
+            organizeRolesByFaction(roles);
+        }
+    
+        async function fetchPlayerCount() {
             try {
-                const response = await fetch('/static/rollen/roles.json');
-                if (!response.ok) {
-                    console.error("Fehler beim Laden der JSON-Datei:", response.statusText);
-                    return;
-                }
+                const response = await fetch('/player_count');
                 const data = await response.json();
-                console.log("Geladene Rollen:", data); // Debugging
-                organizeRolesByFaction(data);
+                return data.count;
             } catch (error) {
-                console.error("Fehler beim Abrufen der Rollen:", error);
+                console.error('Fehler beim Abrufen der Spieleranzahl:', error);
+                return 0; // Standardwert bei Fehler
             }
         }
-
+    
+        async function calculateMaxRoles() {
+            const playerCount = await fetchPlayerCount();
+            const thiefSelected = selectedRoles.some(role => role.Rolle === "Dieb");
+            maxRoles = playerCount + (thiefSelected ? 2 : 0);
+            updateCounter();
+        }
+    
         function organizeRolesByFaction(roles) {
-            console.log("Eingehende Rollen zur Organisation:", roles);
-
             const rolesByFaction = { "Dorf": [], "Werwölfe": [], "Die Zweideutigen": [], "Die Einzelgänger": [] };
+    
             roles.forEach(role => {
                 if (rolesByFaction[role.Fraktion]) {
                     rolesByFaction[role.Fraktion].push(role);
-                } else {
-                    console.warn(`Unbekannte Fraktion: ${role.Fraktion}`);
                 }
             });
-
-            console.log("Gruppierte Rollen nach Fraktionen:", rolesByFaction);
+    
             displayRolesByFaction(rolesByFaction);
         }
-
+    
         function displayRolesByFaction(rolesByFaction) {
-            console.log("Rollen nach Fraktion zur Anzeige:", rolesByFaction);
-
             const rolesContainer = document.getElementById("rolesByFaction");
             rolesContainer.innerHTML = "";
-
-            for (const faction of Object.keys(rolesByFaction)) {
-                if (!rolesByFaction[faction].length) continue;
-
+    
+            for (const faction in rolesByFaction) {
                 const factionDiv = document.createElement("div");
                 factionDiv.classList.add("fraktion");
-
+    
                 const factionTitle = document.createElement("h2");
                 factionTitle.textContent = faction;
                 factionDiv.appendChild(factionTitle);
-
+    
                 const roleList = document.createElement("ul");
                 rolesByFaction[faction].forEach(role => {
                     const li = document.createElement("li");
-
+    
                     const img = document.createElement("img");
                     img.src = `/static/rollen/${role.Rolle.toLowerCase().replace(/ /g, "_")}.png`;
                     img.alt = role.Rolle;
-
+    
                     const span = document.createElement("span");
                     span.textContent = role.Rolle;
-
+    
                     const addButton = document.createElement("button");
                     addButton.textContent = "Hinzufügen";
                     addButton.onclick = () => addRole(role);
-
+    
                     li.appendChild(img);
                     li.appendChild(span);
                     li.appendChild(addButton);
                     roleList.appendChild(li);
                 });
-
+    
                 factionDiv.appendChild(roleList);
                 rolesContainer.appendChild(factionDiv);
             }
-
-            console.log("Aktualisierte linke Liste fertig gerendert."); // Debugging
         }
-
-        function updateSelectedRolesByFaction() {
+    
+        function updateSelectedRoles() {
             const selectedContainer = document.getElementById("selectedRolesByFaction");
             selectedContainer.innerHTML = "";
-
-            const rolesGroupedByFaction = { "Dorf": [], "Werwölfe": [], "Die Zweideutigen": [], "Die Einzelgänger": [] };
-
-            // Gruppiere ausgewählte Rollen nach Fraktion
-            selectedRoles.forEach(role => {
-                rolesGroupedByFaction[role.Fraktion].push(role);
+    
+            selectedRoles.forEach((role, index) => {
+                const li = document.createElement("li");
+    
+                const img = document.createElement("img");
+                img.src = `/static/rollen/${role.Rolle.toLowerCase().replace(/ /g, "_")}.png`;
+                img.alt = role.Rolle;
+    
+                const span = document.createElement("span");
+                span.textContent = role.Rolle;
+    
+                const removeButton = document.createElement("button");
+                removeButton.textContent = "Entfernen";
+                removeButton.onclick = () => removeRole(index); // Entfernt die Rolle anhand des Index
+    
+                li.appendChild(img);
+                li.appendChild(span);
+                li.appendChild(removeButton);
+                selectedContainer.appendChild(li);
             });
-
-            console.log("Aktualisierte rechte Liste:", rolesGroupedByFaction); // Debugging
-
-            // Rendere die rechte Liste
-            for (const [faction, roles] of Object.entries(rolesGroupedByFaction)) {
-                if (!roles.length) continue;
-
-                const factionDiv = document.createElement("div");
-                factionDiv.classList.add("fraktion");
-
-                const factionTitle = document.createElement("h2");
-                factionTitle.textContent = faction;
-                factionDiv.appendChild(factionTitle);
-
-                const roleList = document.createElement("ul");
-                roles.forEach(role => {
-                    const li = document.createElement("li");
-
-                    const img = document.createElement("img");
-                    img.src = `/static/rollen/${role.Rolle.toLowerCase().replace(/ /g, "_")}.png`;
-                    img.alt = role.Rolle;
-
-                    const span = document.createElement("span");
-                    span.textContent = role.Rolle;
-
-                    const removeButton = document.createElement("button");
-                    removeButton.textContent = "Entfernen";
-                    removeButton.onclick = () => removeRole(role);
-
-                    li.appendChild(img);
-                    li.appendChild(span);
-                    li.appendChild(removeButton);
-                    roleList.appendChild(li);
-                });
-
-                factionDiv.appendChild(roleList);
-                selectedContainer.appendChild(factionDiv);
-            }
+    
+            calculateMaxRoles(); // Aktualisiere die maximale Anzahl bei Änderungen
         }
-
-        let selectedRoles = [];
-        let totalPlayers = 10;
-        let maxRoles = totalPlayers;
-
-        function adjustMaxRoles() {
-            const thiefSelected = selectedRoles.some(role => role.Rolle === "Dieb");
-            maxRoles = totalPlayers + (thiefSelected ? 2 : 0);
-            updateCounter();
-        }
-
+    
         function addRole(role) {
             if (selectedRoles.length >= maxRoles) {
                 alert("Maximale Anzahl an Rollen erreicht!");
                 return;
             }
-
-            if (selectedRoles.some(r => r.Rolle === role.Rolle) && !["Dorfbewohner", "Werwolf"].includes(role.Rolle)) {
-                alert(`Die Rolle "${role.Rolle}" kann nur einmal ausgewählt werden!`);
-                return;
+    
+            if (!["Dorfbewohner", "Werwolf"].includes(role.Rolle)) {
+                if (selectedRoles.some(r => r.Rolle === role.Rolle)) {
+                    alert(`Die Rolle "${role.Rolle}" kann nur einmal ausgewählt werden!`);
+                    return;
+                }
             }
-
-            // Rolle zur ausgewählten Liste hinzufügen
-            selectedRoles.push(role);
-
-            // Rechte Liste aktualisieren
-            updateSelectedRolesByFaction();
-
-            // Zähler aktualisieren
-            adjustMaxRoles();
+    
+            const count = role.Rolle === "Die Zwei Schwestern" ? 2 :
+                          role.Rolle === "Die Drei Brüder" ? 3 : 1;
+    
+            for (let i = 0; i < count; i++) {
+                selectedRoles.push({ ...role });
+            }
+    
+            updateSelectedRoles();
             updateCounter();
         }
-
-        function removeRole(role) {
-            const index = selectedRoles.findIndex(r => r.Rolle === role.Rolle);
-            if (index !== -1) {
-                selectedRoles.splice(index, 1); // Entferne die Rolle
-            }
-
-            // Rechte Liste aktualisieren
-            updateSelectedRolesByFaction();
-
-            // Zähler aktualisieren
-            adjustMaxRoles();
+    
+        function removeRole(index) {
+            selectedRoles.splice(index, 1); // Entfernt die Rolle am gegebenen Index
+            updateSelectedRoles();
             updateCounter();
         }
-
+    
         function updateCounter() {
             document.getElementById("counter").textContent = `Ausgewählte Rollen: ${selectedRoles.length} / ${maxRoles}`;
         }
-
+    
         function confirmRoles() {
             fetch("/save_roles", {
                 method: "POST",
@@ -273,30 +247,17 @@
                 }
             });
         }
-
+    
         function goBack() {
             window.location.href = "/";
         }
-
-        document.addEventListener("DOMContentLoaded", () => {
-            fetchRoles();
-            fetchPlayerCount();
+    
+        document.addEventListener("DOMContentLoaded", async () => {
+            await fetchRoles();
+            await calculateMaxRoles(); // Initialisiere die maximale Anzahl
         });
-
-        async function fetchPlayerCount() {
-            try {
-                const response = await fetch("/player_count");
-                if (!response.ok) {
-                    console.error("Fehler beim Abrufen der Spieleranzahl:", response.statusText);
-                    return;
-                }
-                const data = await response.json();
-                totalPlayers = data.count || 0;
-                adjustMaxRoles();
-            } catch (error) {
-                console.error("Fehler beim Abrufen der Spieleranzahl:", error);
-            }
-        }
     </script>
+    
+
 </body>
 </html>
