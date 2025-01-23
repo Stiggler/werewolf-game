@@ -146,15 +146,18 @@ async function fetchOverviewData() {
         document.addEventListener('DOMContentLoaded', fetchOverviewData);
 
         function startRandomGame() {
-        fetch('/random_assign_roles', { method: 'POST' })
-            .then(response => response.json())
-            .then(data => {
-                if (data.message) {
-                    alert(data.message);
-                    window.location.href = '/game'; // Weiterleitung zur Spielseite
-                }
-            });
-    }
+    fetch('/random_assign_roles', { method: 'POST' })
+        .then(response => response.json())
+        .then(data => {
+            if (data.redirect) {
+                window.location.href = data.redirect; // Weiterleitung zur Spielseite
+            } else if (data.error) {
+                alert(data.error);
+            }
+        })
+        .catch(error => console.error("Fehler:", error));
+}
+
 
     function startManualGame() {
         alert('Manuelle Rollenzuweisung ist noch nicht implementiert!');

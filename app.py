@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request, render_template
+from flask import Flask, jsonify, request, render_template, redirect, url_for
 import os
 import sqlite3
 
@@ -275,10 +275,13 @@ def random_assign_roles():
                 assignments
             )
             conn.commit()
-        return jsonify({"message": "Rollen erfolgreich zugewiesen"}), 200
+
+        # JSON-Antwort mit Redirect-Ziel
+        return jsonify({"message": "Rollen erfolgreich zugewiesen", "redirect": url_for('game')}), 200
     except Exception as e:
         print(f"Fehler bei der zufälligen Rollenverteilung: {e}")
         return jsonify({"error": "Fehler bei der zufälligen Rollenverteilung"}), 500
+
 
 
 @app.route('/get_thief_cards', methods=['GET'])
@@ -297,18 +300,27 @@ def game():
         with get_db_connection() as conn:
             # Spieler mit ihren Rollen abrufen
             players = conn.execute("SELECT name, image, role FROM players").fetchall()
-            # Verfügbare Diebeskarten abrufen
-            thief_cards = conn.execute("SELECT role_name FROM thief_cards").fetchall()
+            
+            # Prüfen, ob die Rolle "Dieb" in game_roles existiert
+            dieb_exists = conn.execute(
+                "SELECT 1 FROM game_roles WHERE role_name = 'Dieb' LIMIT 1"
+            ).fetchone() is not None
 
-        # Daten an die Vorlage weitergeben
+            # Verfügbare Diebeskarten nur abrufen, wenn "Dieb" existiert
+            thief_cards = []
+            if dieb_exists:
+                thief_cards = conn.execute("SELECT role_name FROM thief_cards").fetchall()
+
         return render_template(
             'game.html',
             players=[{"name": p["name"], "image": p["image"], "role": p["role"]} for p in players],
-            thief_cards=[{"role_name": t["role_name"]} for t in thief_cards]
+            thief_cards=[{"role_name": t["role_name"]} for t in thief_cards] if dieb_exists else None
         )
     except Exception as e:
         print(f"Fehler in der /game-Route: {e}")
         return "Ein Fehler ist aufgetreten.", 500
+
+
 
 
 
