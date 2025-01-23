@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Spielübersicht</title>
+    <title>Rollenzuweisung</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -35,13 +35,25 @@
             height: 50px;
             border-radius: 5px;
         }
+        .buttons {
+            margin-bottom: 20px;
+        }
+        .buttons button,
+        .buttons a {
+            margin-right: 10px;
+        }
     </style>
 </head>
 <body>
-    <h1>Spielübersicht</h1>
+
+    <h1>Rollenzuweisung</h1>
+
+    <div class="buttons">
+        <a href="{{ url_for('gameoverview') }}">Zurück zur Spielübersicht</a>
+        <button onclick="assignRoles()">Karten neu vergeben</button>
+    </div>
 
     <div class="container">
-        <!-- Spieler -->
         <div class="player">
             <h2>Spieler</h2>
             <ul>
@@ -54,7 +66,7 @@
             </ul>
         </div>
 
-        <!-- Diebeskarten -->
+        {% if thief_cards %}
         <div class="thief-cards">
             <h2>Diebeskarten</h2>
             <ul>
@@ -63,6 +75,23 @@
                 {% endfor %}
             </ul>
         </div>
+        {% endif %}
     </div>
+
+    <script>
+        function assignRoles() {
+            fetch('/random_assign_roles', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.redirect) {
+                        window.location.href = data.redirect; // Weiterleitung zur Spielseite
+                    } else if (data.error) {
+                        alert(data.error); // Fehler anzeigen
+                    }
+                })
+                .catch(error => console.error("Fehler bei der Rollenzuweisung:", error));
+        }
+    </script>
+
 </body>
 </html>
