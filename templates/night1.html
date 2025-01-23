@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Die erste Nacht</title>
+    <style>
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            border: 1px solid #ccc;
+            padding: 10px;
+            text-align: center;
+        }
+        th {
+            background-color: #f4f4f4;
+        }
+        img {
+            width: 50px;
+            height: 50px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Die erste Nacht</h1>
+    <table>
+        <thead>
+            <tr>
+                <th>Bild des Spielers</th>
+                <th>Name des Spielers</th>
+                <th>Bild der Rolle</th>
+                <th>Name der Rolle</th>
+                <th>Beschreibung</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for player in players %}
+            <tr>
+                <td><img src="{{ player.image }}" alt="{{ player.name }}"></td>
+                <td>{{ player.name }}</td>
+                <td><img src="{{ player.role_image }}" alt="{{ player.role }}"></td>
+                <td>{{ player.role }}</td>
+                <td>{{ player.role_description }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>        
+    </table>
+</body>
+</html>

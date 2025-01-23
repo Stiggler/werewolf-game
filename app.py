@@ -1,6 +1,7 @@
 from flask import Flask, jsonify, request, render_template, redirect, url_for
 import os
 import sqlite3
+import json
 
 app = Flask(__name__, template_folder='templates')
 
@@ -33,11 +34,24 @@ def init_db():
                 instance_id INTEGER
             )
         """)
-                # Thief cards Tabelle
+        # Thief cards Tabelle
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS thief_cards (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 role_name TEXT NOT NULL
+            )
+        """)
+        # Game state Tabelle
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS game_state (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                game_id INTEGER NOT NULL,
+                player_id INTEGER,
+                role_id INTEGER,
+                attribute_name TEXT NOT NULL,
+                value TEXT,
+                FOREIGN KEY (player_id) REFERENCES players (id),
+                FOREIGN KEY (role_id) REFERENCES game_roles (id)
             )
         """)
 
@@ -48,6 +62,72 @@ def get_db_connection():
     conn = sqlite3.connect("players.db")
     conn.row_factory = sqlite3.Row
     return conn
+
+# Rollen sortieren nach 'first_night'
+def get_sorted_roles():
+    """Holt die Rollen aus der JSON-Datei und sortiert sie basierend auf 'first_night'."""
+    with open("static/rollen/roles.json", "r", encoding="utf-8") as file:
+        roles_data = json.load(file)
+
+    # Sortieren basierend auf 'first_night', Rollen ohne 'first_night' ans Ende
+    sorted_roles = sorted(roles_data, key=lambda x: x.get("first_night", float("inf")))
+    return sorted_roles
+
+# Spieler und Rollen kombinieren
+def get_players_with_roles():
+    """Holt Spieler aus der Datenbank und ergänzt Rolleninformationen aus der JSON-Datei."""
+    with get_db_connection() as conn:
+        players = conn.execute("SELECT id, name, image, role FROM players").fetchall()
+
+    # Sortierte Rollen abrufen
+    sorted_roles = get_sorted_roles()
+
+    # Spielerinformationen mit Rollendetails erweitern
+    detailed_players = []
+    for player in players:
+        # Rolle in den sortierten Rollen suchen
+        role_details = next((role for role in sorted_roles if role["Rolle"] == player["role"]), None)
+
+        # Spielerinformationen anreichern
+        detailed_players.append({
+            "id": player["id"],
+            "name": player["name"],
+            "image": player["image"],
+            "role": player["role"],
+            "role_image": f"static/rollen/{player['role'].lower().replace(' ', '_')}.png" if player["role"] else None,
+            "role_description": role_details["Beschreibung"] if role_details else "Keine Beschreibung verfügbar",
+            "first_night": role_details.get("first_night", float("inf")) if role_details else float("inf"),
+        })
+
+    # Spieler nach der Rollenreihenfolge sortieren
+    detailed_players.sort(key=lambda x: x["first_night"])
+    return detailed_players
+
+
+# Spielattribute speichern
+def save_game_attribute(game_id, attribute_name, value, player_id=None, role_id=None):
+    with get_db_connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO game_state (game_id, player_id, role_id, attribute_name, value)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (game_id, player_id, role_id, attribute_name, value)
+        )
+        conn.commit()
+
+# Spielattribute abrufen
+def get_game_attribute(game_id, attribute_name):
+    with get_db_connection() as conn:
+        result = conn.execute(
+            """
+            SELECT value FROM game_state
+            WHERE game_id = ? AND attribute_name = ?
+            """,
+            (game_id, attribute_name)
+        ).fetchone()
+        return result["value"] if result else None
+
 
 # Startseite
 @app.route('/')
@@ -320,6 +400,12 @@ def game():
         print(f"Fehler in der /game-Route: {e}")
         return "Ein Fehler ist aufgetreten.", 500
 
+# Route für die erste Nacht
+@app.route('/night1')
+def night1():
+    """Zeigt die Übersicht der Spieler und Rollen für die erste Nacht."""
+    players = get_players_with_roles()
+    return render_template('night1.html', players=players)
 
 
 
