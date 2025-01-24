@@ -78,12 +78,18 @@
                 <tr>
                     <td><img src="{{ player.image }}" alt="{{ player.name }}" width="50"></td>
                     <td>{{ player.name }}</td>
-                    <td>{{ player.role }}</td>
-                    <td><img src="{{ player.original_role_image }}" alt="{{ player.original_role }}" width="50"></td>
+                    <td>{{ player.current_role or 'Keine Rolle' }}</td>
+                    <td>
+                        {% if player.original_role_image %}
+                            <img src="{{ player.original_role_image }}" alt="{{ player.original_role }}" width="50">
+                        {% else %}
+                            Keine Rolle
+                        {% endif %}
+                    </td>
                     <td>{{ player.status }}</td>
                 </tr>
                 {% endfor %}
-            </tbody>
+            </tbody>            
         </table>        
     </div>
     <div class="right-panel">
@@ -93,7 +99,9 @@
                 <!-- Dynamische Inhalte für die aktuelle Rolle -->
             </div>
             <div>
+                <button onclick="previousAction()">Zurück</button>
                 <button onclick="completeAction()">Aktion abschließen</button>
+                <button onclick="updatePlayerTable()">Tabelle aktualisieren</button>
             </div>
         </div>
     </div>
@@ -115,95 +123,119 @@
         }
 
         function loadRole(role) {
-            const phaseDiv = document.getElementById('interactivePhase');
-            phaseDiv.classList.add('active');
-            document.getElementById('roleTitle').textContent = `Rollenaktion: ${role.role_name}`;
-            document.getElementById('roleContent').innerHTML = '';
+    const phaseDiv = document.getElementById('interactivePhase');
+    phaseDiv.classList.add('active');
+    document.getElementById('roleTitle').textContent = `Rollenaktion: ${role.role_name}`;
+    const roleContentDiv = document.getElementById('roleContent');
+    roleContentDiv.innerHTML = ''; // Lösche alte Inhalte
 
-            if (role.role_name === 'Dieb') {
-                loadThiefPhase();
-            } else {
-                document.getElementById('roleContent').textContent = 'Aktion für diese Rolle wird durchgeführt.';
-            }
-        }
-
-        function loadThiefPhase() {
-            fetch('/get_thief_cards')
-                .then(response => response.json())
-                .then(data => {
-                    const thiefCards = data.cards;
-                    const roleContentDiv = document.getElementById('roleContent');
-                    roleContentDiv.innerHTML = '<h3>Wähle eine Karte</h3>';
-                    thiefCards.forEach(card => {
-                        const button = document.createElement('button');
-                        button.textContent = card.role_name;
-                        button.onclick = () => chooseThiefCard(card.role_name);
-                        roleContentDiv.appendChild(button);
-                    });
-                });
-        }
-
-        function chooseThiefCard(roleName) {
-            if (!CURRENT_PLAYER_ID) {
-                alert("Spieler-ID fehlt. Bitte überprüfen Sie die Backend-Logik.");
-                return;
-            }
-
-            fetch('/set_role_action', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    game_id: 1,
-                    role_name: 'Dieb',
-                    player_id: CURRENT_PLAYER_ID,
-                    action_name: 'Wähle neue Rolle',
-                    new_role: roleName,
-                    player_status: 'lebendig'
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.message) {
-                    alert(data.message);
-                    completeAction();
-                }
-            })
-            .catch(error => console.error("Fehler:", error));
-        }
-
-        function completeAction() {
-    currentRoleIndex++;
-    if (currentRoleIndex < roles.length) {
-        loadRole(roles[currentRoleIndex]);
+    if (role.role_name === 'Dieb') {
+        loadThiefPhase();
     } else {
-        alert('Die Nacht ist vorbei!');
-        location.reload(); // Aktualisiert die Seite, um den finalen Status zu zeigen
+        roleContentDiv.textContent = `Aktion für die Rolle ${role.role_name} wird ausgeführt.`;
     }
-
-    // Tabelle aktualisieren
-    updatePlayerTable();
 }
 
+
+function loadThiefPhase() {
+    fetch('/get_thief_cards')
+        .then(response => response.json())
+        .then(data => {
+            const thiefCards = data.cards;
+            const roleContentDiv = document.getElementById('roleContent');
+            roleContentDiv.innerHTML = '<h3>Wähle eine Karte</h3>';
+            thiefCards.forEach(card => {
+                const button = document.createElement('button');
+                button.style.border = "none";
+                button.style.background = "none";
+                button.onclick = () => chooseThiefCard(card.role_name);
+
+                const img = document.createElement('img');
+                img.src = card.image_path;
+                img.alt = card.role_name;
+                img.style.width = "100px";
+                img.style.margin = "10px";
+
+                button.appendChild(img);
+                roleContentDiv.appendChild(button);
+            });
+        });
+}
+
+
+
+function chooseThiefCard(roleName) {
+    fetch('/set_role_action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            game_id: 1,
+            role_name: 'Dieb',
+            player_id: CURRENT_PLAYER_ID,
+            action_name: 'Wähle neue Rolle',
+            new_role: roleName
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.message) {
+            alert(data.message);
+            updatePlayerTable(); // Aktualisiere die Tabelle
+            completeAction();
+        }
+    })
+    .catch(error => console.error("Fehler:", error));
+}
+
+
+
+
+function completeAction() {
+    currentRoleIndex++;
+    if (currentRoleIndex < roles.length) {
+        loadRole(roles[currentRoleIndex]); // Lade die nächste Rollenaktion
+    } else {
+        alert('Die Nacht ist vorbei!');
+        location.reload(); // Seite neu laden, wenn alle Aktionen abgeschlossen sind
+    }
+
+    updatePlayerTable(); // Tabelle aktualisieren
+}
+
+
+function previousAction() {
+    if (currentRoleIndex > 0) {
+        currentRoleIndex--;
+        loadRole(roles[currentRoleIndex]);
+    } else {
+        alert('Keine vorherige Aktion vorhanden.');
+    }
+}
+
+
 function updatePlayerTable() {
-    fetch('/get_players') // Endpunkt, der aktuelle Spielerinformationen zurückgibt
+    fetch('/players')
         .then(response => response.json())
         .then(data => {
             const tbody = document.querySelector('#playersTable tbody');
-            tbody.innerHTML = ''; // Alte Einträge entfernen
+            tbody.innerHTML = ''; // Entferne alte Einträge
+
             data.forEach(player => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td><img src="${player.image}" alt="${player.name}" width="50"></td>
                     <td>${player.name}</td>
-                    <td>${player.role}</td>
-                    <td><img src="${player.original_role_image}" alt="${player.original_role}" width="50"></td>
-                    <td>${player.status}</td>
+                    <td>${player.role || 'Keine Rolle'}</td>
+                    <td><img src="/static/rollen/default.png" alt="Default" width="50"></td>
+                    <td>Lebendig</td>
                 `;
                 tbody.appendChild(tr);
             });
         })
         .catch(error => console.error('Fehler beim Aktualisieren der Tabelle:', error));
 }
+
+
 
 
 

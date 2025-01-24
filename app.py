@@ -130,11 +130,15 @@ def get_sorted_roles():
 
 # Spieler und Rollen kombinieren
 def get_players_with_roles():
-    """Holt Spieler aus der Datenbank und ergänzt ursprüngliche Rolle sowie Status."""
+    """Holt Spieler aus der Datenbank und ergänzt die ursprüngliche sowie aktuelle Rolle."""
     with get_db_connection() as conn:
         players = conn.execute("""
-            SELECT p.id, p.name, p.image, p.role, p.status,
-                   (SELECT role_name FROM role_actions WHERE player_id = p.id ORDER BY timestamp ASC LIMIT 1) AS original_role
+            SELECT 
+                p.id, 
+                p.name, 
+                p.image, 
+                p.role AS current_role, 
+                (SELECT role_name FROM role_actions WHERE player_id = p.id ORDER BY timestamp ASC LIMIT 1) AS original_role
             FROM players p
         """).fetchall()
 
@@ -144,13 +148,14 @@ def get_players_with_roles():
             "id": player["id"],
             "name": player["name"],
             "image": player["image"],
-            "role": player["role"],
-            "status": player["status"],
+            "current_role": player["current_role"],
             "original_role": player["original_role"],
             "original_role_image": f"/static/rollen/{player['original_role'].lower().replace(' ', '_')}.png" if player["original_role"] else None
         }
         for player in players
     ]
+
+
 
 
     # Spieler nach der Rollenreihenfolge sortieren
@@ -470,9 +475,22 @@ def random_assign_roles():
 
 @app.route('/get_thief_cards', methods=['GET'])
 def get_thief_cards():
+    """Gibt die verfügbaren Diebeskarten zurück."""
     with get_db_connection() as conn:
-        thief_cards = conn.execute("SELECT role_name FROM thief_cards").fetchall()
-    return jsonify({"cards": [{"role_name": card["role_name"]} for card in thief_cards]})
+        thief_cards = conn.execute("""
+            SELECT role_name FROM thief_cards
+        """).fetchall()
+    
+    # Füge Bildpfade hinzu
+    cards_with_images = [
+        {
+            "role_name": card["role_name"],
+            "image_path": f"/static/rollen/{card['role_name'].lower().replace(' ', '_')}.png"
+        }
+        for card in thief_cards
+    ]
+    return jsonify({"cards": cards_with_images})
+
 
 @app.route('/manual_start', methods=['POST'])
 def manual_start():
