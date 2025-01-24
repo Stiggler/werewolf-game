@@ -15,6 +15,7 @@ def init_db():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT UNIQUE NOT NULL,
                 image TEXT
+                
             )
         """)
         # Players-Tabelle
@@ -24,6 +25,7 @@ def init_db():
                 name TEXT NOT NULL,
                 image TEXT,
                 role TEXT
+                status TEXT                       
             )
         """)
         # Game roles Tabelle
@@ -64,7 +66,22 @@ def init_db():
                 description TEXT
             )
         """)
-
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS role_actions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                game_id INTEGER NOT NULL,
+                role_name TEXT NOT NULL,
+                player_id INTEGER NOT NULL,
+                target_id INTEGER,
+                action_name TEXT NOT NULL,
+                result TEXT,
+                new_role TEXT,
+                player_status TEXT DEFAULT 'lebendig',
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (player_id) REFERENCES players (id),
+                FOREIGN KEY (target_id) REFERENCES players (id)
+            )
+        """)
     print("Database initialized!")
 
 # Verbindung zur Datenbank abrufen
@@ -72,6 +89,33 @@ def get_db_connection():
     conn = sqlite3.connect("players.db")
     conn.row_factory = sqlite3.Row  # Ermöglicht den Zugriff auf Spaltennamen
     return conn
+
+
+def clear_role_actions():
+    """Löscht alle Einträge aus der Tabelle role_actions."""
+    with get_db_connection() as conn:
+        conn.execute("DELETE FROM role_actions")
+        conn.commit()
+    print("Tabelle role_actions wurde geleert.")
+
+def reset_player_status():
+    """Setzt den Status aller Spieler auf lebendig."""
+    with get_db_connection() as conn:
+        conn.execute("UPDATE players SET status = 'lebendig'")
+        conn.commit()
+    print("Spielerstatus wurde zurückgesetzt.")
+
+def update_player_status(player_id, new_status):
+    """Aktualisiert den Status eines Spielers."""
+    with get_db_connection() as conn:
+        conn.execute("""
+            UPDATE players
+            SET status = ?
+            WHERE id = ?
+        """, (new_status, player_id))
+        conn.commit()
+    print(f"Status von Spieler {player_id} auf {new_status} gesetzt.")
+
 
 
 # Rollen sortieren nach 'first_night'
@@ -86,34 +130,42 @@ def get_sorted_roles():
 
 # Spieler und Rollen kombinieren
 def get_players_with_roles():
-    """Holt Spieler aus der Datenbank und ergänzt Rolleninformationen aus der JSON-Datei."""
+    """Holt Spieler aus der Datenbank und ergänzt ursprüngliche Rolle sowie Status."""
     with get_db_connection() as conn:
-        players = conn.execute("SELECT id, name, image, role FROM players").fetchall()
+        players = conn.execute("""
+            SELECT p.id, p.name, p.image, p.role, p.status,
+                   (SELECT role_name FROM role_actions WHERE player_id = p.id ORDER BY timestamp ASC LIMIT 1) AS original_role
+            FROM players p
+        """).fetchall()
 
-    # Sortierte Rollen abrufen
-    sorted_roles = get_sorted_roles()
-
-    # Spielerinformationen mit Rollendetails erweitern
-    detailed_players = []
-    for player in players:
-        # Rolle in den sortierten Rollen suchen
-        role_details = next((role for role in sorted_roles if role["Rolle"] == player["role"]), None)
-
-        # Spielerinformationen anreichern
-        detailed_players.append({
+    # Spielerinformationen erweitern
+    return [
+        {
             "id": player["id"],
             "name": player["name"],
             "image": player["image"],
             "role": player["role"],
-            "role_image": f"static/rollen/{player['role'].lower().replace(' ', '_')}.png" if player["role"] else None,
-            "role_description": role_details["Beschreibung"] if role_details else "Keine Beschreibung verfügbar",
-            "first_night": role_details.get("first_night", float("inf")) if role_details else float("inf"),
-        })
+            "status": player["status"],
+            "original_role": player["original_role"],
+            "original_role_image": f"/static/rollen/{player['original_role'].lower().replace(' ', '_')}.png" if player["original_role"] else None
+        }
+        for player in players
+    ]
+
 
     # Spieler nach der Rollenreihenfolge sortieren
     detailed_players.sort(key=lambda x: x["first_night"])
     return detailed_players
 
+# Rollenaktionen speichern
+def save_role_action(game_id, role_name, player_id, target_id, action_name, result, new_role=None, player_status=None):
+    """Speichert die Aktion einer Rolle sowie den Status des Spielers in der Tabelle role_actions."""
+    with get_db_connection() as conn:
+        conn.execute("""
+            INSERT INTO role_actions (game_id, role_name, player_id, target_id, action_name, result, new_role, player_status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (game_id, role_name, player_id, target_id, action_name, result, new_role, player_status))
+        conn.commit()
 
 # Spielattribute speichern
 def save_game_attribute(game_id, attribute_name, value, player_id=None, role_id=None):
@@ -138,6 +190,8 @@ def get_game_attribute(game_id, attribute_name):
             (game_id, attribute_name)
         ).fetchone()
         return result["value"] if result else None
+
+
 
 
 def sync_base_roles():
@@ -450,12 +504,33 @@ def game():
         print(f"Fehler in der /game-Route: {e}")
         return "Ein Fehler ist aufgetreten.", 500
 
+
+@app.route('/start_game', methods=['POST'])
+def start_game():
+    """Leert die Tabelle role_actions und initialisiert den Spielerstatus."""
+    clear_role_actions()
+    reset_player_status()
+    return jsonify({"message": "Spiel gestartet und Aktionen geleert"})
+
+
+
+
+
+
 # Route für die erste Nacht
+
 @app.route('/night1')
 def night1():
     """Zeigt die Übersicht der Spieler und Rollen für die erste Nacht."""
     players = get_players_with_roles()
-    return render_template('night1.html', players=players)
+    with get_db_connection() as conn:
+        thief_player = conn.execute("""
+            SELECT id FROM players WHERE role = 'Dieb' LIMIT 1
+        """).fetchone()
+        thief_player_id = thief_player["id"] if thief_player else None
+    return render_template('night1.html', players=players, thief_player_id=thief_player_id or 'null')
+
+
 
 @app.route('/next_role', methods=['GET'])
 def get_next_role():
@@ -473,10 +548,64 @@ def get_next_role():
     return jsonify([{"role_name": role["role_name"], "first_night": role["first_night"]} for role in roles])
 
 
+# Rollenaktionen setzen
+@app.route('/set_role_action', methods=['POST'])
+def set_role_action():
+    data = request.json
+    game_id = data.get('game_id')
+    role_name = data.get('role_name')
+    player_id = data.get('player_id')
+    target_id = data.get('target_id')  # Optional
+    action_name = data.get('action_name')
+    result = data.get('result', 'Erfolgreich')
+    new_role = data.get('new_role')  # Optional: Neue Rolle des Spielers
+    player_status = data.get('player_status', 'lebendig')  # Optional: Tot oder lebendig
+
+    if not game_id or not role_name or not player_id or not action_name:
+        return jsonify({"error": "Fehlende Daten"}), 400
+
+    # Aktion speichern
+    save_role_action(game_id, role_name, player_id, target_id, action_name, result, new_role, player_status)
+
+    # Spielerrolle aktualisieren, wenn eine neue Rolle angegeben ist
+    if new_role:
+        with get_db_connection() as conn:
+            conn.execute("""
+                UPDATE players SET role = ? WHERE id = ?
+            """, (new_role, player_id))
+            conn.commit()
+
+    return jsonify({"message": "Aktion erfolgreich gespeichert"}), 200
 
 
 
+# Synchronisiere Basisrollen mit JSON
+def sync_base_roles():
+    """Synchronisiert die Rollen aus der JSON-Datei mit der Tabelle base_roles."""
+    with sqlite3.connect("players.db") as conn:
+        cursor = conn.cursor()
 
+        # Rollen aus der JSON-Datei laden
+        with open("static/rollen/roles.json", "r", encoding="utf-8") as file:
+            roles_data = json.load(file)
+
+        # Synchronisation: Einfügen oder Aktualisieren
+        for role in roles_data:
+            cursor.execute("""
+                INSERT INTO base_roles (role_name, first_night, night_order, description)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(role_name) DO UPDATE SET
+                first_night = excluded.first_night,
+                night_order = excluded.night_order,
+                description = excluded.description
+            """, (
+                role["Rolle"],
+                role.get("first_night"),
+                role.get("night_order"),
+                role.get("Beschreibung")
+            ))
+        conn.commit()
+        print("Basisrollen erfolgreich synchronisiert!")
 
 
 if __name__ == '__main__':

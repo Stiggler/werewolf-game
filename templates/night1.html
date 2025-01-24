@@ -49,28 +49,42 @@
         .interactive-phase.active {
             display: block;
         }
+        /* Neue CSS-Regel für die Spalte der ursprünglichen Rolle */
+        table td:nth-child(4) {
+            width: 60px;
+            text-align: center;
+        }
     </style>
 </head>
 <body>
+    <script>
+        // Spieler-ID des Diebs (dynamisch aus dem Backend übergeben)
+        const CURRENT_PLAYER_ID = "{{ thief_player_id | default('null') }}";
+    </script>
+
     <div class="left-panel">
         <table id="playersTable">
             <thead>
                 <tr>
                     <th>Bild</th>
                     <th>Name</th>
-                    <th>Rolle</th>
+                    <th>Aktuelle Rolle</th>
+                    <th>Ursprüngliche Rolle</th>
+                    <th>Status</th>
                 </tr>
             </thead>
             <tbody>
                 {% for player in players %}
                 <tr>
-                    <td><img src="{{ player.image }}" alt="{{ player.name }}"></td>
+                    <td><img src="{{ player.image }}" alt="{{ player.name }}" width="50"></td>
                     <td>{{ player.name }}</td>
                     <td>{{ player.role }}</td>
+                    <td><img src="{{ player.original_role_image }}" alt="{{ player.original_role }}" width="50"></td>
+                    <td>{{ player.status }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
-        </table>
+        </table>        
     </div>
     <div class="right-panel">
         <div id="interactivePhase" class="interactive-phase">
@@ -130,33 +144,69 @@
         }
 
         function chooseThiefCard(roleName) {
+            if (!CURRENT_PLAYER_ID) {
+                alert("Spieler-ID fehlt. Bitte überprüfen Sie die Backend-Logik.");
+                return;
+            }
+
             fetch('/set_role_action', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    player_id: CURRENT_PLAYER_ID, // Die ID des aktuellen Spielers muss dynamisch ersetzt werden
-                    original_role: 'Dieb',
-                    new_role: roleName
+                    game_id: 1,
+                    role_name: 'Dieb',
+                    player_id: CURRENT_PLAYER_ID,
+                    action_name: 'Wähle neue Rolle',
+                    new_role: roleName,
+                    player_status: 'lebendig'
                 })
             })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.message) {
-                        alert(data.message);
-                        completeAction();
-                    }
-                });
+            .then(response => response.json())
+            .then(data => {
+                if (data.message) {
+                    alert(data.message);
+                    completeAction();
+                }
+            })
+            .catch(error => console.error("Fehler:", error));
         }
 
         function completeAction() {
-            currentRoleIndex++;
-            if (currentRoleIndex < roles.length) {
-                loadRole(roles[currentRoleIndex]);
-            } else {
-                alert('Die Nacht ist vorbei!');
-                document.getElementById('interactivePhase').classList.remove('active');
-            }
-        }
+    currentRoleIndex++;
+    if (currentRoleIndex < roles.length) {
+        loadRole(roles[currentRoleIndex]);
+    } else {
+        alert('Die Nacht ist vorbei!');
+        location.reload(); // Aktualisiert die Seite, um den finalen Status zu zeigen
+    }
+
+    // Tabelle aktualisieren
+    updatePlayerTable();
+}
+
+function updatePlayerTable() {
+    fetch('/get_players') // Endpunkt, der aktuelle Spielerinformationen zurückgibt
+        .then(response => response.json())
+        .then(data => {
+            const tbody = document.querySelector('#playersTable tbody');
+            tbody.innerHTML = ''; // Alte Einträge entfernen
+            data.forEach(player => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td><img src="${player.image}" alt="${player.name}" width="50"></td>
+                    <td>${player.name}</td>
+                    <td>${player.role}</td>
+                    <td><img src="${player.original_role_image}" alt="${player.original_role}" width="50"></td>
+                    <td>${player.status}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        })
+        .catch(error => console.error('Fehler beim Aktualisieren der Tabelle:', error));
+}
+
+
+
     </script>
 </body>
 </html>
