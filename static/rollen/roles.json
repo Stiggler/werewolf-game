@@ -4,207 +4,307 @@
         "Fraktion": "Die Zweideutigen",
         "first_night": 2,
         "night_order": 1,
-        "Beschreibung": "Ein unermüdlicher Künstler, der einige Zeit im Dorf verweilt, bevor es ihn – den Winter über – in wärmere Gefilde verschlägt. ..."
+        "Beschreibung": "Ein unermüdlicher Künstler, der einige Zeit im Dorf verweilt, bevor es ihn – den Winter über – in wärmere Gefilde verschlägt. ...",
+        "Einmalig (erste Nacht)": "",
+        "Dynamisch (pro Nacht)": "",
+        "Tagaktionen": "",
+        "Besonderheiten": ""
     },
     {
         "Rolle": "Seherin",
         "Fraktion": "Dorf",
         "first_night": 27,
         "night_order": 2,
-        "Beschreibung": "Die Seherin erwacht, während alle anderen schlafen und darf sich eine Person aussuchen, deren Rolle ihr der Spielleiter offenbaren soll ..."
+        "Beschreibung": "Die Seherin erwacht, während alle anderen schlafen und darf sich eine Person aussuchen, deren Rolle ihr der Spielleiter offenbaren soll ...",
+        "Einmalig (erste Nacht)": "",
+        "Dynamisch (pro Nacht)": "Spielerrolle aufdecken",
+        "Tagaktionen": "",
+        "Besonderheiten": ""
     },
     {
         "Rolle": "Der Fuchs",
         "Fraktion": "Dorf",
         "first_night": 4,
         "night_order": 3,
-        "Beschreibung": "Das feine Gespür dieses lebhaften und dennoch diskreten Charakters wird in Düsterwald von jedem geschätzt – außer vielleicht von den Hühnern ..."
+        "Beschreibung": "Das feine Gespür dieses lebhaften und dennoch diskreten Charakters wird in Düsterwald von jedem geschätzt – außer vielleicht von den Hühnern ...",
+        "Einmalig (erste Nacht)": "",
+        "Dynamisch (pro Nacht)": "Feinde in Nähe entdecken",
+        "Tagaktionen": "",
+        "Besonderheiten": ""
     },
     {
         "Rolle": "Heiler",
         "Fraktion": "Dorf",
         "first_night": 10,
         "night_order": 4,
-        "Beschreibung": "Der Heiler erwacht am Anfang jeder Nacht und bestimmt einen Spieler (auch sich selbst), den er vor den Werwölfen beschützen will ..."
+        "Beschreibung": "Der Heiler erwacht am Anfang jeder Nacht und bestimmt einen Spieler (auch sich selbst), den er vor den Werwölfen beschützen will ...",
+        "Einmalig (erste Nacht)": "",
+        "Dynamisch (pro Nacht)": "Jeden Spieler schützen, aber nicht zweimal hintereinander",
+        "Tagaktionen": "",
+        "Besonderheiten": ""
     },
     {
         "Rolle": "Werwolf",
         "Fraktion": "Werwölfe",
         "first_night": 22,
         "night_order": 5,
-        "Beschreibung": "Jede Nacht frisst er einen Dorfbewohner. Tagsüber versucht er, seine wahre Identität zu verbergen ..."
+        "Beschreibung": "Jede Nacht frisst er einen Dorfbewohner. Tagsüber versucht er, seine wahre Identität zu verbergen ...",
+        "Einmalig (erste Nacht)": "",
+        "Dynamisch (pro Nacht)": "Opfer bestimmen",
+        "Tagaktionen": "",
+        "Besonderheiten": ""
     },
     {
         "Rolle": "Der weiße Werwolf",
         "Fraktion": "Die Einzelgänger",
         "first_night": 25,
         "night_order": 6,
-        "Beschreibung": "Der weiße Werwolf wacht jede Runde zusammen mit den anderen Werwölfen auf und verhält sich normal ..."
+        "Beschreibung": "Der weiße Werwolf wacht jede Runde zusammen mit den anderen Werwölfen auf und verhält sich normal ...",
+        "Einmalig (erste Nacht)": "",
+        "Dynamisch (pro Nacht)": "Alleine aufwachen und optional einen Werwolf töten",
+        "Tagaktionen": "",
+        "Besonderheiten": "Erwacht jede 2. Nacht"
     },
     {
         "Rolle": "Der Urwolf",
         "Fraktion": "Werwölfe",
         "first_night": 23,
         "night_order": 7,
-        "Beschreibung": "Er ist ein Werwolf, der einmalig einen Spieler statt zu fressen in einen Werwolf verwandeln kann ..."
+        "Beschreibung": "Er ist ein Werwolf, der einmalig einen Spieler statt zu fressen in einen Werwolf verwandeln kann ...",
+        "Einmalig (erste Nacht)": "",
+        "Dynamisch (pro Nacht)": "",
+        "Tagaktionen": "",
+        "Besonderheiten": "Kann jede Nacht eingesetzt werden"
     },
     {
         "Rolle": "Der Große böse Wolf",
         "Fraktion": "Werwölfe",
         "first_night": 24,
         "night_order": 8,
-        "Beschreibung": "Im Düsterwald sind die drei kleinen Schweinchen nicht die einzigen, die den großen bösen Wolf fürchten ..."
+        "Beschreibung": "Im Düsterwald sind die drei kleinen Schweinchen nicht die einzigen, die den großen bösen Wolf fürchten ...",
+        "Einmalig (erste Nacht)": "",
+        "Dynamisch (pro Nacht)": "Nach der Wolfsphase ein zusätzliches Opfer wählen",
+        "Tagaktionen": "",
+        "Besonderheiten": "Erwacht erneut, wenn kein Werwolf tot ist"
     },
     {
         "Rolle": "Dieb",
         "Fraktion": "Die Zweideutigen",
         "first_night": 1,
         "night_order": null,
-        "Beschreibung": "Der Dieb ist der erste, der im Spiel erwacht. Wird mit Dieb gespielt, werden zwei Karten mehr ausgeteilt ..."
+        "Beschreibung": "Der Dieb ist der erste, der im Spiel erwacht. Wird mit Dieb gespielt, werden zwei Karten mehr ausgeteilt ...",
+        "Einmalig (erste Nacht)": "Wähle zwischen Diebeskarten",
+        "Dynamisch (pro Nacht)": "",
+        "Tagaktionen": "",
+        "Besonderheiten": ""
     },
     {
         "Rolle": "Amor",
         "Fraktion": "Dorf",
         "first_night": 3,
         "night_order": null,
-        "Beschreibung": "Amor erwacht nur einmal in der allerersten Nacht, um zwei Spieler seiner Wahl miteinander zu verkuppeln ..."
+        "Beschreibung": "Amor erwacht nur einmal in der allerersten Nacht, um zwei Spieler seiner Wahl miteinander zu verkuppeln ...",
+        "Einmalig (erste Nacht)": "Verliebte Spieler wählen",
+        "Dynamisch (pro Nacht)": "",
+        "Tagaktionen": "",
+        "Besonderheiten": ""
     },
-
-        {
-            "Rolle": "Der Stotternde Richter",
-            "Fraktion": "Dorf",
-            "first_night": 5,
-            "night_order": null,
-            "Beschreibung": "Der jüngste Sohn des Müllers träumte schon immer davon, ein Advokat zu werden ..."
-        },
-        {
-            "Rolle": "Die Zwei Schwestern",
-            "Fraktion": "Dorf",
-            "first_night": 6,
-            "night_order": null,
-            "Beschreibung": "Kreuzt eine der zwei Schwestern den Weg eines Dorfbewohners, ist dieser oft ein wenig verwirrt ..."
-        },
-        {
-            "Rolle": "Die Drei Brüder",
-            "Fraktion": "Dorf",
-            "first_night": 7,
-            "night_order": null,
-            "Beschreibung": "Das ganze Dorf ist erfüllt vom fröhlichen Klang ihrer Stimmen, wenn die drei von einem harten Arbeitstag auf dem Felde heimkommen ..."
-        },
-        {
-            "Rolle": "Das wilde Kind",
-            "Fraktion": "Die Zweideutigen",
-            "first_night": 8,
-            "night_order": null,
-            "Beschreibung": "Das wilde Kind wählt am Anfang einer Partie einen anderen Spieler, der ab dann sein Vorbild wird ..."
-        },
-        {
-            "Rolle": "Der Bärenführer",
-            "Fraktion": "Dorf",
-            "first_night": 9,
-            "night_order": null,
-            "Beschreibung": "Ach, wie süß ist die Erinnerung an das Rasseln der Ketten auf dem Pflaster des Dorfplatzes ..."
-        },
-        {
-            "Rolle": "Das Wilde Kind",
-            "Fraktion": "Die Zweideutigen",
-            "first_night": 11,
-            "night_order": null,
-            "Beschreibung": "In jungen Jahren von seinen Eltern im Wald zurückgelassen, wuchs das Kind zwischen den Wölfen auf ..."
-        },
-        {
-            "Rolle": "Der Alte",
-            "Fraktion": "Dorf",
-            "first_night": 12,
-            "night_order": null,
-            "Beschreibung": "Der Alte überlebt den ersten Angriff der Werwölfe. Wird er aber vom Dorfgericht zum Opfer bestimmt ..."
-        },
-        {
-            "Rolle": "Der Dorfdepp",
-            "Fraktion": "Dorf",
-            "first_night": 13,
-            "night_order": null,
-            "Beschreibung": "Welches Dorf hat nicht seinen Dorfdeppen? Er macht ein wenig Unsinn, jedoch hat er ein so einnehmendes Wesen ..."
-        },
-        {
-            "Rolle": "Der Engel",
-            "Fraktion": "Die Einzelgänger",
-            "first_night": 14,
-            "night_order": null,
-            "Beschreibung": "Wenn er in der Abstimmung der ersten Runde eliminiert wird (nicht von den Werwölfen), gewinnt er das Spiel allein."
-        },
-        {
-            "Rolle": "Mädchen",
-            "Fraktion": "Dorf",
-            "first_night": 15,
-            "night_order": null,
-            "Beschreibung": "Das kleine Mädchen darf nachts in der Werwolf-Phase heimlich blinzeln, um so die Werwölfe zu erkennen ..."
-        },
-            {
-                "Rolle": "Jäger",
-                "Fraktion": "Dorf",
-                "first_night": 16,
-                "night_order": null,
-                "Beschreibung": "Scheidet der Jäger aus dem Spiel aus (Egal ob in Tag oder Nacht und auf welche Weise), feuert er in seinem letzten Atemzug noch einen Schuss ab ..."
-            },
-            {
-                "Rolle": "Der Wolfshund",
-                "Fraktion": "Die Zweideutigen",
-                "first_night": 17,
-                "night_order": null,
-                "Beschreibung": "Alle Hunde wissen in ihrem tiefsten Inneren, dass ihre Vorfahren Wölfe waren ..."
-            },
-            {
-                "Rolle": "Der Verbitterte Greis",
-                "Fraktion": "Die Einzelgänger",
-                "first_night": 18,
-                "night_order": null,
-                "Beschreibung": "Seit seiner Kindheit – wohl wegen der geringen Zuneigung durch andere – verabscheut sich diese arme Seele selbst ..."
-            },
-            {
-                "Rolle": "Der Ritter mit dem verrosteten Schwert",
-                "Fraktion": "Dorf",
-                "first_night": 19,
-                "night_order": null,
-                "Beschreibung": "Der Ritter infiziert mit seinem rostigen Schwert den Werwolf zu seiner Linken mit Tetanus, wenn er von ihnen in der Nacht gefressen wird ..."
-            },
-            {
-                "Rolle": "Der Sündenbock",
-                "Fraktion": "Dorf",
-                "first_night": 20,
-                "night_order": null,
-                "Beschreibung": "Es ist sehr traurig, aber wenn in Düsterwald etwas schief läuft, dann muss ungerechterweise immer er die Folgen dafür tragen ..."
-            },
-            {
-                "Rolle": "Die Ergebene Magd",
-                "Fraktion": "Die Zweideutigen",
-                "first_night": 21,
-                "night_order": null,
-                "Beschreibung": "Wer könnte von einer größeren Ergebenheit träumen, als der, das eigene Leben für den Herren zu geben ..."
-            },
-            {
-                "Rolle": "Dorfbewohner",
-                "Fraktion": "Dorf",
-                "first_night": 29,
-                "night_order": null,
-                "Beschreibung": "Er hat keine besonderen Fähigkeiten. Seine einzigen Waffen sind sein scharfer Sinn für verdächtiges Verhalten ..."
-            },
-            {
-                "Rolle": "Flötenspieler",
-                "Fraktion": "Die Einzelgänger",
-                "first_night": 28,
-                "night_order": 10,
-                "Beschreibung": "Der Flötenspieler ist eine eigene Partei und kann nur alleine das Spiel gewinnen, außer er ist verliebt ..."
-            },
-            {
-                "Rolle": "Hexe",
-                "Fraktion": "Dorf",
-                "first_night": 26,
-                "night_order": 9,
-                "Beschreibung": "Die Hexe erwacht immer direkt nachdem die Werwölfe ihr Opfer ausgesucht haben. Sie hat im Verlauf des gesamten Spiels einen Gift- und einen Heiltrank ..."
-            }
-        ]
-            
-    
-
-
+    {
+        "Rolle": "Der Stotternde Richter",
+        "Fraktion": "Dorf",
+        "first_night": 5,
+        "night_order": null,
+        "Beschreibung": "Der jüngste Sohn des Müllers träumte schon immer davon, ein Advokat zu werden ...",
+        "Einmalig (erste Nacht)": "",
+        "Dynamisch (pro Nacht)": "",
+        "Tagaktionen": "Ermöglicht zweite Abstimmung am Tag",
+        "Besonderheiten": ""
+    },
+    {
+        "Rolle": "Die Zwei Schwestern",
+        "Fraktion": "Dorf",
+        "first_night": 6,
+        "night_order": null,
+        "Beschreibung": "Kreuzt eine der zwei Schwestern den Weg eines Dorfbewohners, ist dieser oft ein wenig verwirrt ...",
+        "Einmalig (erste Nacht)": "",
+        "Dynamisch (pro Nacht)": "Können kommunizieren",
+        "Tagaktionen": "",
+        "Besonderheiten": ""
+    },
+    {
+        "Rolle": "Die Drei Brüder",
+        "Fraktion": "Dorf",
+        "first_night": 7,
+        "night_order": null,
+        "Beschreibung": "Das ganze Dorf ist erfüllt vom fröhlichen Klang ihrer Stimmen, wenn die drei von einem harten Arbeitstag auf dem Felde heimkommen ...",
+        "Einmalig (erste Nacht)": "",
+        "Dynamisch (pro Nacht)": "Können kommunizieren",
+        "Tagaktionen": "",
+        "Besonderheiten": ""
+    },
+    {
+        "Rolle": "Das wilde Kind",
+        "Fraktion": "Die Zweideutigen",
+        "first_night": 8,
+        "night_order": null,
+        "Beschreibung": "Das wilde Kind wählt am Anfang einer Partie einen anderen Spieler, der ab dann sein Vorbild wird ...",
+        "Einmalig (erste Nacht)": "Wählt ein Vorbild",
+        "Dynamisch (pro Nacht)": "Wird zum Werwolf bei Vorbilds Elimination",
+        "Tagaktionen": "",
+        "Besonderheiten": ""
+    },
+    {
+        "Rolle": "Der Bärenführer",
+        "Fraktion": "Dorf",
+        "first_night": 9,
+        "night_order": null,
+        "Beschreibung": "Ach, wie süß ist die Erinnerung an das Rasseln der Ketten auf dem Pflaster des Dorfplatzes ...",
+        "Einmalig (erste Nacht)": "",
+        "Dynamisch (pro Nacht)": "",
+        "Tagaktionen": "",
+        "Besonderheiten": ""
+    },
+    {
+        "Rolle": "Der Verbitterte Greis",
+        "Fraktion": "Die Einzelgänger",
+        "first_night": 18,
+        "night_order": null,
+        "Beschreibung": "Seit seiner Kindheit – wohl wegen der geringen Zuneigung durch andere – verabscheut sich diese arme Seele selbst ...",
+        "Einmalig (erste Nacht)": "",
+        "Dynamisch (pro Nacht)": "",
+        "Tagaktionen": "",
+        "Besonderheiten": ""
+    },
+    {
+        "Rolle": "Der Ritter mit dem verrosteten Schwert",
+        "Fraktion": "Dorf",
+        "first_night": 19,
+        "night_order": null,
+        "Beschreibung": "Der Ritter infiziert mit seinem rostigen Schwert den Werwolf zu seiner Linken mit Tetanus, wenn er von ihnen in der Nacht gefressen wird ...",
+        "Einmalig (erste Nacht)": "",
+        "Dynamisch (pro Nacht)": "",
+        "Tagaktionen": "",
+        "Besonderheiten": "Infiziert Werwolf bei Tod"
+    },
+    {
+        "Rolle": "Der Sündenbock",
+        "Fraktion": "Dorf",
+        "first_night": 20,
+        "night_order": null,
+        "Beschreibung": "Es ist sehr traurig, aber wenn in Düsterwald etwas schief läuft, dann muss ungerechterweise immer er die Folgen dafür tragen ...",
+        "Einmalig (erste Nacht)": "",
+        "Dynamisch (pro Nacht)": "",
+        "Tagaktionen": "Trägt Konsequenzen bei keinem Konsens",
+        "Besonderheiten": ""
+    },
+    {
+        "Rolle": "Die Ergebene Magd",
+        "Fraktion": "Die Zweideutigen",
+        "first_night": 21,
+        "night_order": null,
+        "Beschreibung": "Wer könnte von einer größeren Ergebenheit träumen, als der, das eigene Leben für den Herren zu geben ...",
+        "Einmalig (erste Nacht)": "",
+        "Dynamisch (pro Nacht)": "",
+        "Tagaktionen": "",
+        "Besonderheiten": "Opfert sich für ihren Meister"
+    },
+    {
+        "Rolle": "Dorfbewohner",
+        "Fraktion": "Dorf",
+        "first_night": 29,
+        "night_order": null,
+        "Beschreibung": "Er hat keine besonderen Fähigkeiten. Seine einzigen Waffen sind sein scharfer Sinn für verdächtiges Verhalten ...",
+        "Einmalig (erste Nacht)": "",
+        "Dynamisch (pro Nacht)": "",
+        "Tagaktionen": "",
+        "Besonderheiten": ""
+    },
+    {
+        "Rolle": "Flötenspieler",
+        "Fraktion": "Die Einzelgänger",
+        "first_night": 28,
+        "night_order": 10,
+        "Beschreibung": "Der Flötenspieler ist eine eigene Partei und kann nur alleine das Spiel gewinnen, außer er ist verliebt ...",
+        "Einmalig (erste Nacht)": "",
+        "Dynamisch (pro Nacht)": "Verzaubert jede Nacht 2 Spieler",
+        "Tagaktionen": "",
+        "Besonderheiten": ""
+    },
+    {
+        "Rolle": "Hexe",
+        "Fraktion": "Dorf",
+        "first_night": 26,
+        "night_order": 9,
+        "Beschreibung": "Die Hexe erwacht immer direkt nachdem die Werwölfe ihr Opfer ausgesucht haben. Sie hat im Verlauf des gesamten Spiels einen Gift- und einen Heiltrank ...",
+        "Einmalig (erste Nacht)": "Heiltrank, Gifttrank",
+        "Dynamisch (pro Nacht)": "Tränke verwenden (jeder Trank nur 1× im Spiel)",
+        "Tagaktionen": "",
+        "Besonderheiten": ""
+    },
+    {
+        "Rolle": "Der Alte",
+        "Fraktion": "Dorf",
+        "first_night": 12,
+        "night_order": null,
+        "Beschreibung": "Der Alte hat zwei Leben. Wenn er in der Nacht angegriffen wird, überlebt er den ersten Angriff, verliert aber ein Leben.",
+        "Einmalig (erste Nacht)": "",
+        "Dynamisch (pro Nacht)": "",
+        "Tagaktionen": "",
+        "Besonderheiten": "Hat zwei Leben"
+    },
+    {
+        "Rolle": "Der Dorfdepp",
+        "Fraktion": "Dorf",
+        "first_night": 13,
+        "night_order": null,
+        "Beschreibung": "Der Dorfdepp bleibt im Spiel, auch wenn er am Tag vom Dorf eliminiert wird.",
+        "Einmalig (erste Nacht)": "",
+        "Dynamisch (pro Nacht)": "",
+        "Tagaktionen": "Bleibt im Spiel trotz Tagelimitation",
+        "Besonderheiten": ""
+    },
+    {
+        "Rolle": "Mädchen",
+        "Fraktion": "Dorf",
+        "first_night": 15,
+        "night_order": null,
+        "Beschreibung": "Das Mädchen darf nachts in der Werwolfphase heimlich blinzeln, um die Werwölfe zu erkennen. Wenn es entdeckt wird, stirbt es und die Nacht endet sofort.",
+        "Einmalig (erste Nacht)": "",
+        "Dynamisch (pro Nacht)": "",
+        "Tagaktionen": "",
+        "Besonderheiten": "Nacht endet bei Entdeckung"
+    },
+    {
+        "Rolle": "Der Engel",
+        "Fraktion": "Die Einzelgänger",
+        "first_night": 14,
+        "night_order": null,
+        "Beschreibung": "Wenn der Engel in der ersten Abstimmung am Tag gewählt wird, gewinnt er sofort und das Spiel endet.",
+        "Einmalig (erste Nacht)": "",
+        "Dynamisch (pro Nacht)": "",
+        "Tagaktionen": "Gewinnt, wenn in der ersten Abstimmung gewählt",
+        "Besonderheiten": ""
+    },
+    {
+        "Rolle": "Jäger",
+        "Fraktion": "Dorf",
+        "first_night": 16,
+        "night_order": null,
+        "Beschreibung": "Wenn der Jäger stirbt, darf er sofort einen Spieler seiner Wahl töten.",
+        "Einmalig (erste Nacht)": "",
+        "Dynamisch (pro Nacht)": "",
+        "Tagaktionen": "Tötet einen Spieler bei Tod",
+        "Besonderheiten": ""
+    },
+    {
+        "Rolle": "Der Wolfshund",
+        "Fraktion": "Die Zweideutigen",
+        "first_night": 17,
+        "night_order": null,
+        "Beschreibung": "Der Wolfshund wählt in der ersten Nacht, ob er als Werwolf oder als Dorfbewohner spielen möchte. Seine Wahl bleibt für den Rest des Spiels bestehen.",
+        "Einmalig (erste Nacht)": "Wählt Werwolf oder Dorfbewohner",
+        "Dynamisch (pro Nacht)": "Übernimmt Rolle für den Rest des Spiels",
+        "Tagaktionen": "",
+        "Besonderheiten": ""
+    }
+]
