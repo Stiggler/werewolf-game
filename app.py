@@ -54,14 +54,25 @@ def init_db():
                 FOREIGN KEY (role_id) REFERENCES game_roles (id)
             )
         """)
+                # Rollen aus JSON
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS base_roles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                role_name TEXT NOT NULL UNIQUE,
+                first_night INTEGER,
+                night_order INTEGER,
+                description TEXT
+            )
+        """)
 
     print("Database initialized!")
 
 # Verbindung zur Datenbank abrufen
 def get_db_connection():
     conn = sqlite3.connect("players.db")
-    conn.row_factory = sqlite3.Row
+    conn.row_factory = sqlite3.Row  # Ermöglicht den Zugriff auf Spaltennamen
     return conn
+
 
 # Rollen sortieren nach 'first_night'
 def get_sorted_roles():
@@ -127,6 +138,45 @@ def get_game_attribute(game_id, attribute_name):
             (game_id, attribute_name)
         ).fetchone()
         return result["value"] if result else None
+
+
+def sync_base_roles():
+    """Synchronisiert die Rollen aus der JSON-Datei mit der Tabelle base_roles."""
+    with sqlite3.connect("players.db") as conn:
+        cursor = conn.cursor()
+        
+        # Erstelle die Tabelle, falls sie nicht existiert
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS base_roles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                role_name TEXT NOT NULL UNIQUE,
+                first_night INTEGER,
+                night_order INTEGER,
+                description TEXT
+            )
+        """)
+        
+        # Rollen aus der JSON-Datei laden
+        with open("static/rollen/roles.json", "r", encoding="utf-8") as file:
+            roles_data = json.load(file)
+
+        # Synchronisation: Einfügen oder Aktualisieren
+        for role in roles_data:
+            cursor.execute("""
+                INSERT INTO base_roles (role_name, first_night, night_order, description)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(role_name) DO UPDATE SET
+                first_night = excluded.first_night,
+                night_order = excluded.night_order,
+                description = excluded.description
+            """, (
+                role["Rolle"],
+                role.get("first_night"),
+                role.get("night_order"),
+                role.get("Beschreibung")
+            ))
+        conn.commit()
+        print("Basisrollen erfolgreich synchronisiert!")
 
 
 # Startseite
@@ -407,9 +457,30 @@ def night1():
     players = get_players_with_roles()
     return render_template('night1.html', players=players)
 
+@app.route('/next_role', methods=['GET'])
+def get_next_role():
+    with get_db_connection() as conn:
+        # Abrufen der Rollen aus `game_roles` mit den zugehörigen Daten aus `base_roles`
+        roles = conn.execute("""
+            SELECT gr.role_name, br.first_night
+            FROM game_roles gr
+            INNER JOIN base_roles br ON gr.role_name = br.role_name
+            WHERE br.first_night IS NOT NULL
+            ORDER BY br.first_night ASC
+        """).fetchall()
+
+    # JSON-Ausgabe der Rollen mit `role_name` und `first_night`
+    return jsonify([{"role_name": role["role_name"], "first_night": role["first_night"]} for role in roles])
+
+
+
+
+
 
 
 
 if __name__ == '__main__':
     init_db()  # Datenbank initialisieren
+    sync_base_roles()  # Basisrollen synchronisieren
     app.run(debug=True)
+

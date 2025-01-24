@@ -5,6 +5,25 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Die erste Nacht</title>
     <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            display: flex;
+        }
+        .left-panel, .right-panel {
+            height: 100vh;
+            overflow-y: auto;
+        }
+        .left-panel {
+            width: 30%;
+            background-color: #f4f4f4;
+            border-right: 1px solid #ccc;
+            padding: 10px;
+        }
+        .right-panel {
+            width: 70%;
+            padding: 10px;
+        }
         table {
             width: 100%;
             border-collapse: collapse;
@@ -22,31 +41,122 @@
             height: 50px;
             border-radius: 5px;
         }
+        .interactive-phase {
+            display: none;
+            text-align: center;
+            margin-top: 20px;
+        }
+        .interactive-phase.active {
+            display: block;
+        }
     </style>
 </head>
 <body>
-    <h1>Die erste Nacht</h1>
-    <table>
-        <thead>
-            <tr>
-                <th>Bild des Spielers</th>
-                <th>Name des Spielers</th>
-                <th>Bild der Rolle</th>
-                <th>Name der Rolle</th>
-                <th>Beschreibung</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for player in players %}
-            <tr>
-                <td><img src="{{ player.image }}" alt="{{ player.name }}"></td>
-                <td>{{ player.name }}</td>
-                <td><img src="{{ player.role_image }}" alt="{{ player.role }}"></td>
-                <td>{{ player.role }}</td>
-                <td>{{ player.role_description }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>        
-    </table>
+    <div class="left-panel">
+        <table id="playersTable">
+            <thead>
+                <tr>
+                    <th>Bild</th>
+                    <th>Name</th>
+                    <th>Rolle</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for player in players %}
+                <tr>
+                    <td><img src="{{ player.image }}" alt="{{ player.name }}"></td>
+                    <td>{{ player.name }}</td>
+                    <td>{{ player.role }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <div class="right-panel">
+        <div id="interactivePhase" class="interactive-phase">
+            <h2 id="roleTitle">Rollenaktion</h2>
+            <div id="roleContent">
+                <!-- Dynamische Inhalte für die aktuelle Rolle -->
+            </div>
+            <div>
+                <button onclick="completeAction()">Aktion abschließen</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentRoleIndex = 0;
+        let roles = [];
+
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchRoles();
+        });
+
+        async function fetchRoles() {
+            const response = await fetch('/next_role');
+            roles = await response.json();
+            if (roles.length > 0) {
+                loadRole(roles[currentRoleIndex]);
+            }
+        }
+
+        function loadRole(role) {
+            const phaseDiv = document.getElementById('interactivePhase');
+            phaseDiv.classList.add('active');
+            document.getElementById('roleTitle').textContent = `Rollenaktion: ${role.role_name}`;
+            document.getElementById('roleContent').innerHTML = '';
+
+            if (role.role_name === 'Dieb') {
+                loadThiefPhase();
+            } else {
+                document.getElementById('roleContent').textContent = 'Aktion für diese Rolle wird durchgeführt.';
+            }
+        }
+
+        function loadThiefPhase() {
+            fetch('/get_thief_cards')
+                .then(response => response.json())
+                .then(data => {
+                    const thiefCards = data.cards;
+                    const roleContentDiv = document.getElementById('roleContent');
+                    roleContentDiv.innerHTML = '<h3>Wähle eine Karte</h3>';
+                    thiefCards.forEach(card => {
+                        const button = document.createElement('button');
+                        button.textContent = card.role_name;
+                        button.onclick = () => chooseThiefCard(card.role_name);
+                        roleContentDiv.appendChild(button);
+                    });
+                });
+        }
+
+        function chooseThiefCard(roleName) {
+            fetch('/set_role_action', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    player_id: CURRENT_PLAYER_ID, // Die ID des aktuellen Spielers muss dynamisch ersetzt werden
+                    original_role: 'Dieb',
+                    new_role: roleName
+                })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.message) {
+                        alert(data.message);
+                        completeAction();
+                    }
+                });
+        }
+
+        function completeAction() {
+            currentRoleIndex++;
+            if (currentRoleIndex < roles.length) {
+                loadRole(roles[currentRoleIndex]);
+            } else {
+                alert('Die Nacht ist vorbei!');
+                document.getElementById('interactivePhase').classList.remove('active');
+            }
+        }
+    </script>
 </body>
 </html>
