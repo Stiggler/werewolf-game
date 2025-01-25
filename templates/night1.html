@@ -49,10 +49,14 @@
         .interactive-phase.active {
             display: block;
         }
-        /* Neue CSS-Regel für die Spalte der ursprünglichen Rolle */
-        table td:nth-child(4) {
-            width: 60px;
-            text-align: center;
+        /* Neue CSS-Regeln */
+        td div {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        td div img {
+            border-radius: 5px;
         }
     </style>
 </head>
@@ -66,36 +70,49 @@
         <table id="playersTable">
             <thead>
                 <tr>
-                    <th>Bild</th>
-                    <th>Name</th>
+                    <th>Spieler</th>
                     <th>Aktuelle Rolle</th>
                     <th>Ursprüngliche Rolle</th>
                     <th>Status</th>
+                    <th>Aktionen</th>
                 </tr>
             </thead>
             <tbody>
                 {% for player in players %}
                 <tr>
-                    <td><img src="{{ player.image }}" alt="{{ player.name }}" width="50"></td>
-                    <td>{{ player.name }}</td>
-                    <td>{{ player.current_role or 'Keine Rolle' }}</td>
+                    <td>
+                        <div style="position: relative; display: inline-block;">
+                            <img src="{{ player.image }}" alt="{{ player.name }}" width="150">
+                            <span>{{ player.name }}</span>
+                            {% if player.in_love %}
+                            <img src="/static/icons/inlove.png" alt="In Love" style="position: absolute; top: -5px; right: -5px; width: 25px; height: 25px;">
+                            {% endif %}
+                        </div>
+                    </td>                                   
+                    <td>
+                        <div>
+                            <img src="/static/rollen/{{ player.current_role | lower | replace(' ', '_') }}.png" 
+                                 alt="{{ player.current_role }}" width="50">
+                            <span>{{ player.current_role or 'Keine Rolle' }}</span>
+                        </div>
+                    </td>
                     <td>
                         {% if player.original_role_image %}
-                            <img src="{{ player.original_role_image }}" alt="{{ player.original_role }}" width="50">
+                        <img src="{{ player.original_role_image }}" alt="{{ player.original_role }}" width="50">
                         {% else %}
-                            Keine Rolle
+                        Keine Rolle
                         {% endif %}
                     </td>
                     <td>{{ player.status }}</td>
                     <td>
-                        <button onclick="killPlayer({{ player.id }})" 
+                        <button onclick="killPlayer('{{ player.id }}')"
                                 style="background-color: red; color: white; border: none; padding: 5px 10px; border-radius: 5px;">
                             Töten
                         </button>
                     </td>
                 </tr>
                 {% endfor %}
-            </tbody>                     
+            </tbody>                       
         </table>        
     </div>
     <div class="right-panel">
@@ -137,101 +154,183 @@
 
     if (role.role_name === 'Dieb') {
         loadThiefPhase();
+    } else if (role.role_name === 'Amor') {
+        fetch('/players') // Hole die Liste der Spieler
+            .then(response => response.json())
+            .then(players => loadAmorPhase(players));
     } else {
         roleContentDiv.textContent = `Aktion für die Rolle ${role.role_name} wird ausgeführt.`;
     }
 }
 
 
-function loadThiefPhase() {
-    fetch('/get_thief_cards')
-        .then(response => response.json())
-        .then(data => {
-            const thiefCards = data.cards;
-            const roleContentDiv = document.getElementById('roleContent');
-            roleContentDiv.innerHTML = '<h3>Wähle eine Karte</h3>';
-            thiefCards.forEach(card => {
-                const button = document.createElement('button');
-                button.style.border = "none";
-                button.style.background = "none";
-                button.onclick = () => chooseThiefCard(card.role_name);
+        function loadThiefPhase() {
+            fetch('/get_thief_cards')
+                .then(response => response.json())
+                .then(data => {
+                    const thiefCards = data.cards;
+                    const roleContentDiv = document.getElementById('roleContent');
+                    roleContentDiv.innerHTML = '<h3>Wähle eine Karte</h3>';
+                    thiefCards.forEach(card => {
+                        const button = document.createElement('button');
+                        button.style.border = "none";
+                        button.style.background = "none";
+                        button.onclick = () => chooseThiefCard(card.role_name);
 
-                const img = document.createElement('img');
-                img.src = card.image_path;
-                img.alt = card.role_name;
-                img.style.width = "100px";
-                img.style.margin = "10px";
+                        const img = document.createElement('img');
+                        img.src = card.image_path;
+                        img.alt = card.role_name;
+                        img.style.width = "100px";
+                        img.style.margin = "10px";
 
-                button.appendChild(img);
-                roleContentDiv.appendChild(button);
-            });
-        });
-}
-
-
-
-function chooseThiefCard(roleName) {
-    fetch('/set_role_action', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            game_id: 1,
-            role_name: 'Dieb',
-            player_id: CURRENT_PLAYER_ID,
-            action_name: 'Wähle neue Rolle',
-            new_role: roleName
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.message) {
-            alert(data.message);
-            updatePlayerTable(); // Aktualisiere die Tabelle
-            completeAction();
+                        button.appendChild(img);
+                        roleContentDiv.appendChild(button);
+                    });
+                });
         }
-    })
-    .catch(error => console.error("Fehler:", error));
+
+        function chooseThiefCard(roleName) {
+            fetch('/set_role_action', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    game_id: 1,
+                    role_name: 'Dieb',
+                    player_id: CURRENT_PLAYER_ID,
+                    action_name: 'Wähle neue Rolle',
+                    new_role: roleName
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.message) {
+                    alert(data.message);
+                    updatePlayerTable(); // Aktualisiere die Tabelle
+                    completeAction();
+                }
+            })
+            .catch(error => console.error("Fehler:", error));
+        }
+
+        function loadAmorPhase(players) {
+    const roleContentDiv = document.getElementById('roleContent');
+    roleContentDiv.innerHTML = '<h3>Amor erwacht und wählt zwei Verliebte</h3>';
+    
+    const playerContainer = document.createElement('div');
+    playerContainer.style.display = "flex";
+    playerContainer.style.flexWrap = "wrap";
+    playerContainer.style.gap = "10px";
+
+    let selectedPlayers = [];
+
+    players.forEach(player => {
+        const playerCard = document.createElement('div');
+        playerCard.style.border = "1px solid #ccc";
+        playerCard.style.padding = "10px";
+        playerCard.style.cursor = "pointer";
+        playerCard.style.display = "flex";
+        playerCard.style.flexDirection = "column";
+        playerCard.style.alignItems = "center";
+        playerCard.onclick = () => {
+            if (selectedPlayers.includes(player.id)) {
+                selectedPlayers = selectedPlayers.filter(id => id !== player.id);
+                playerCard.style.border = "1px solid #ccc";
+            } else if (selectedPlayers.length < 2) {
+                selectedPlayers.push(player.id);
+                playerCard.style.border = "2px solid red";
+            }
+        };
+
+        const img = document.createElement('img');
+        img.src = player.image;
+        img.alt = player.name;
+        img.style.width = "100px";
+        img.style.height = "100px";
+
+        const name = document.createElement('span');
+        name.textContent = player.name;
+
+        playerCard.appendChild(img);
+        playerCard.appendChild(name);
+        playerContainer.appendChild(playerCard);
+    });
+
+    const confirmButton = document.createElement('button');
+    confirmButton.textContent = 'Oh ja Baby';
+    confirmButton.style.marginTop = "20px";
+    confirmButton.onclick = () => {
+        if (selectedPlayers.length === 2) {
+            fetch('/amor_action', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ lover1_id: selectedPlayers[0], lover2_id: selectedPlayers[1] })
+            })
+            .then(response => response.json())
+            .then(data => {
+                alert(data.message);
+                updatePlayerTable(); // Tabelle aktualisieren
+                completeAction(); // Zur nächsten Aktion wechseln
+            })
+            .catch(error => console.error('Fehler bei der Amor-Aktion:', error));
+        } else {
+            alert('Bitte wähle genau zwei Spieler aus.');
+        }
+    };
+
+    roleContentDiv.appendChild(playerContainer);
+    roleContentDiv.appendChild(confirmButton);
 }
 
 
 
+        function completeAction() {
+            currentRoleIndex++;
+            if (currentRoleIndex < roles.length) {
+                loadRole(roles[currentRoleIndex]); // Lade die nächste Rollenaktion
+            } else {
+                alert('Die Nacht ist vorbei!');
+                location.reload(); // Seite neu laden, wenn alle Aktionen abgeschlossen sind
+            }
 
-function completeAction() {
-    currentRoleIndex++;
-    if (currentRoleIndex < roles.length) {
-        loadRole(roles[currentRoleIndex]); // Lade die nächste Rollenaktion
-    } else {
-        alert('Die Nacht ist vorbei!');
-        location.reload(); // Seite neu laden, wenn alle Aktionen abgeschlossen sind
-    }
+            updatePlayerTable(); // Tabelle aktualisieren
+        }
 
-    updatePlayerTable(); // Tabelle aktualisieren
-}
+        function previousAction() {
+            if (currentRoleIndex > 0) {
+                currentRoleIndex--;
+                loadRole(roles[currentRoleIndex]);
+            } else {
+                alert('Keine vorherige Aktion vorhanden.');
+            }
+        }
 
-
-function previousAction() {
-    if (currentRoleIndex > 0) {
-        currentRoleIndex--;
-        loadRole(roles[currentRoleIndex]);
-    } else {
-        alert('Keine vorherige Aktion vorhanden.');
-    }
-}
-
-
-function updatePlayerTable() {
+        function updatePlayerTable() {
     fetch('/players')
         .then(response => response.json())
         .then(data => {
+            console.log("Spieler-Daten mit 'in_love':", data); // Debugging-Ausgabe
             const tbody = document.querySelector('#playersTable tbody');
             tbody.innerHTML = ''; // Entferne alte Einträge
 
             data.forEach(player => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
-                    <td><img src="${player.image}" alt="${player.name}" width="50"></td>
-                    <td>${player.name}</td>
-                    <td>${player.current_role || 'Keine Rolle'}</td>
+                    <td>
+                        <div style="position: relative;">
+                            <img src="${player.image}" alt="${player.name}" width="50">
+                            <span>${player.name}</span>
+                            ${player.in_love 
+                                ? '<img src="/static/icons/inlove.png" alt="In Love" style="position: absolute; top: 0; right: 0; width: 20px;">' 
+                                : ''}
+                        </div>
+                    </td>
+                    <td>
+                        <div>
+                            <img src="/static/rollen/${player.current_role ? player.current_role.toLowerCase().replace(' ', '_') : 'default'}.png" 
+                                 alt="${player.current_role || 'Keine Rolle'}" width="50">
+                            <span>${player.current_role || 'Keine Rolle'}</span>
+                        </div>
+                    </td>
                     <td>
                         ${player.original_role_image 
                             ? `<img src="${player.original_role_image}" alt="${player.original_role}" width="50">` 
@@ -253,33 +352,28 @@ function updatePlayerTable() {
 
 
 
-function killPlayer(playerId) {
-    if (!confirm('Möchtest du diesen Spieler wirklich töten?')) {
-        return; // Aktion abbrechen
-    }
 
-    fetch('/kill_player', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ player_id: playerId })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.message) {
-            alert(data.message);
-            updatePlayerTable(); // Tabelle aktualisieren
-        } else if (data.error) {
-            alert(`Fehler: ${data.error}`);
+        function killPlayer(playerId) {
+            if (!confirm('Möchtest du diesen Spieler wirklich töten?')) {
+                return; // Aktion abbrechen
+            }
+
+            fetch('/kill_player', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ player_id: playerId })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.message) {
+                    alert(data.message);
+                    updatePlayerTable(); // Tabelle aktualisieren
+                } else if (data.error) {
+                    alert(`Fehler: ${data.error}`);
+                }
+            })
+            .catch(error => console.error('Fehler beim Töten des Spielers:', error));
         }
-    })
-    .catch(error => console.error('Fehler beim Töten des Spielers:', error));
-}
-
-
-
-
-
-
     </script>
 </body>
 </html>
