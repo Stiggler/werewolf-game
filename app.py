@@ -15,6 +15,7 @@ def init_db():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT UNIQUE NOT NULL,
                 image TEXT
+                
             )
         """)
         # Players-Tabelle
@@ -24,6 +25,7 @@ def init_db():
                 name TEXT NOT NULL,
                 image TEXT,
                 role TEXT
+                status TEXT                       
             )
         """)
         # Game roles Tabelle
@@ -54,14 +56,76 @@ def init_db():
                 FOREIGN KEY (role_id) REFERENCES game_roles (id)
             )
         """)
+                # Rollen aus JSON
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS base_roles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                role_name TEXT NOT NULL UNIQUE,
+                first_night INTEGER,
+                night_order INTEGER,
+                description TEXT
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS role_actions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                game_id INTEGER NOT NULL,
+                role_name TEXT NOT NULL,
+                player_id INTEGER NOT NULL,
+                target_id INTEGER,
+                action_name TEXT NOT NULL,
+                result TEXT,
+                new_role TEXT,
+                player_status TEXT DEFAULT 'lebendig',
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (player_id) REFERENCES players (id),
+                FOREIGN KEY (target_id) REFERENCES players (id)
+            )
+        """)
+        # Spalte `in_love` hinzufügen, falls sie fehlt
+        try:
+            cursor.execute("ALTER TABLE players ADD COLUMN in_love BOOLEAN DEFAULT FALSE")
+        except sqlite3.OperationalError:
+            print("Spalte `in_love` existiert bereits.")
 
-    print("Database initialized!")
+    print("Datenbank initialisiert.")
+
+
 
 # Verbindung zur Datenbank abrufen
 def get_db_connection():
     conn = sqlite3.connect("players.db")
-    conn.row_factory = sqlite3.Row
+    conn.row_factory = sqlite3.Row  # Ermöglicht den Zugriff auf Spaltennamen
     return conn
+
+
+def clear_role_actions():
+    """Löscht alle Einträge aus der Tabelle role_actions."""
+    with get_db_connection() as conn:
+        conn.execute("DELETE FROM role_actions")
+        conn.commit()
+    print("Tabelle role_actions wurde geleert.")
+
+def reset_player_status():
+    """Setzt den Status aller Spieler auf lebendig."""
+    with get_db_connection() as conn:
+        conn.execute("UPDATE players SET status = 'lebendig'")
+        conn.commit()
+    print("Spielerstatus wurde zurückgesetzt.")
+
+
+def update_player_status(player_id, new_status):
+    """Aktualisiert den Status eines Spielers."""
+    with get_db_connection() as conn:
+        conn.execute("""
+            UPDATE players
+            SET status = ?
+            WHERE id = ?
+        """, (new_status, player_id))
+        conn.commit()
+    print(f"Status von Spieler {player_id} auf {new_status} gesetzt.")
+
+
 
 # Rollen sortieren nach 'first_night'
 def get_sorted_roles():
@@ -75,34 +139,55 @@ def get_sorted_roles():
 
 # Spieler und Rollen kombinieren
 def get_players_with_roles():
-    """Holt Spieler aus der Datenbank und ergänzt Rolleninformationen aus der JSON-Datei."""
+    """Holt Spieler aus der Datenbank und ergänzt Attribute wie 'in_love'."""
     with get_db_connection() as conn:
-        players = conn.execute("SELECT id, name, image, role FROM players").fetchall()
+        players = conn.execute("""
+            SELECT 
+                p.id, 
+                p.name, 
+                p.image, 
+                p.role AS current_role, 
+                p.status, 
+                p.in_love,  -- Spalte 'in_love' hinzufügen
+                (SELECT role_name FROM role_actions WHERE player_id = p.id ORDER BY timestamp ASC LIMIT 1) AS original_role
+            FROM players p
+        """).fetchall()
 
-    # Sortierte Rollen abrufen
-    sorted_roles = get_sorted_roles()
-
-    # Spielerinformationen mit Rollendetails erweitern
-    detailed_players = []
-    for player in players:
-        # Rolle in den sortierten Rollen suchen
-        role_details = next((role for role in sorted_roles if role["Rolle"] == player["role"]), None)
-
-        # Spielerinformationen anreichern
-        detailed_players.append({
+    return [
+        {
             "id": player["id"],
             "name": player["name"],
             "image": player["image"],
-            "role": player["role"],
-            "role_image": f"static/rollen/{player['role'].lower().replace(' ', '_')}.png" if player["role"] else None,
-            "role_description": role_details["Beschreibung"] if role_details else "Keine Beschreibung verfügbar",
-            "first_night": role_details.get("first_night", float("inf")) if role_details else float("inf"),
-        })
+            "current_role": player["current_role"],
+            "status": player["status"],
+            "in_love": player["in_love"],  # Attribut 'in_love' hinzufügen
+            "original_role": player["original_role"],
+            "original_role_image": f"/static/rollen/{player['original_role'].lower().replace(' ', '_')}.png" if player["original_role"] else None
+        }
+        for player in players
+    ]
+
+
+
+
+
+
+
+
 
     # Spieler nach der Rollenreihenfolge sortieren
     detailed_players.sort(key=lambda x: x["first_night"])
     return detailed_players
 
+# Rollenaktionen speichern
+def save_role_action(game_id, role_name, player_id, target_id, action_name, result, new_role=None, player_status=None):
+    """Speichert die Aktion einer Rolle sowie den Status des Spielers in der Tabelle role_actions."""
+    with get_db_connection() as conn:
+        conn.execute("""
+            INSERT INTO role_actions (game_id, role_name, player_id, target_id, action_name, result, new_role, player_status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (game_id, role_name, player_id, target_id, action_name, result, new_role, player_status))
+        conn.commit()
 
 # Spielattribute speichern
 def save_game_attribute(game_id, attribute_name, value, player_id=None, role_id=None):
@@ -127,6 +212,47 @@ def get_game_attribute(game_id, attribute_name):
             (game_id, attribute_name)
         ).fetchone()
         return result["value"] if result else None
+
+
+
+
+def sync_base_roles():
+    """Synchronisiert die Rollen aus der JSON-Datei mit der Tabelle base_roles."""
+    with sqlite3.connect("players.db") as conn:
+        cursor = conn.cursor()
+        
+        # Erstelle die Tabelle, falls sie nicht existiert
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS base_roles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                role_name TEXT NOT NULL UNIQUE,
+                first_night INTEGER,
+                night_order INTEGER,
+                description TEXT
+            )
+        """)
+        
+        # Rollen aus der JSON-Datei laden
+        with open("static/rollen/roles.json", "r", encoding="utf-8") as file:
+            roles_data = json.load(file)
+
+        # Synchronisation: Einfügen oder Aktualisieren
+        for role in roles_data:
+            cursor.execute("""
+                INSERT INTO base_roles (role_name, first_night, night_order, description)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(role_name) DO UPDATE SET
+                first_night = excluded.first_night,
+                night_order = excluded.night_order,
+                description = excluded.description
+            """, (
+                role["Rolle"],
+                role.get("first_night"),
+                role.get("night_order"),
+                role.get("Beschreibung")
+            ))
+        conn.commit()
+        print("Basisrollen erfolgreich synchronisiert!")
 
 
 # Startseite
@@ -185,9 +311,10 @@ def remove_from_pool():
 # Spieler abrufen
 @app.route('/players', methods=['GET'])
 def get_players():
-    with get_db_connection() as conn:
-        players = conn.execute("SELECT * FROM players").fetchall()
-    return jsonify([{"id": row["id"], "name": row["name"], "image": row["image"], "role": row["role"]} for row in players])
+    players = get_players_with_roles()
+    print("Abgerufene Spieler-Daten:", players)  # Debugging-Ausgabe
+    return jsonify(players)
+
 
 # Spieler zum aktiven Spiel hinzufügen
 @app.route('/add_to_players', methods=['POST'])
@@ -366,9 +493,22 @@ def random_assign_roles():
 
 @app.route('/get_thief_cards', methods=['GET'])
 def get_thief_cards():
+    """Gibt die verfügbaren Diebeskarten zurück."""
     with get_db_connection() as conn:
-        thief_cards = conn.execute("SELECT role_name FROM thief_cards").fetchall()
-    return jsonify({"cards": [{"role_name": card["role_name"]} for card in thief_cards]})
+        thief_cards = conn.execute("""
+            SELECT role_name FROM thief_cards
+        """).fetchall()
+    
+    # Füge Bildpfade hinzu
+    cards_with_images = [
+        {
+            "role_name": card["role_name"],
+            "image_path": f"/static/rollen/{card['role_name'].lower().replace(' ', '_')}.png"
+        }
+        for card in thief_cards
+    ]
+    return jsonify({"cards": cards_with_images})
+
 
 @app.route('/manual_start', methods=['POST'])
 def manual_start():
@@ -400,16 +540,155 @@ def game():
         print(f"Fehler in der /game-Route: {e}")
         return "Ein Fehler ist aufgetreten.", 500
 
+
+@app.route('/start_game', methods=['POST'])
+def start_game():
+    """Initialisiert das Spiel, setzt alle relevanten Spalten zurück."""
+    with get_db_connection() as conn:
+        # Tabelle role_actions leeren
+        conn.execute("DELETE FROM role_actions")
+
+        # Spielerstatus und Verliebtheitsstatus zurücksetzen
+        conn.execute("UPDATE players SET status = 'lebendig', in_love = FALSE")
+
+        conn.commit()
+
+    return jsonify({"message": "Spiel gestartet und Aktionen zurückgesetzt"})
+
+
+
+
+
+
+
 # Route für die erste Nacht
+
 @app.route('/night1')
 def night1():
     """Zeigt die Übersicht der Spieler und Rollen für die erste Nacht."""
     players = get_players_with_roles()
-    return render_template('night1.html', players=players)
+    with get_db_connection() as conn:
+        thief_player = conn.execute("""
+            SELECT id FROM players WHERE role = 'Dieb' LIMIT 1
+        """).fetchone()
+        thief_player_id = thief_player["id"] if thief_player else None
+    return render_template('night1.html', players=players, thief_player_id=thief_player_id or 'null')
 
+
+
+@app.route('/next_role', methods=['GET'])
+def get_next_role():
+    with get_db_connection() as conn:
+        # Abrufen der Rollen aus `game_roles` mit den zugehörigen Daten aus `base_roles`
+        roles = conn.execute("""
+            SELECT gr.role_name, br.first_night
+            FROM game_roles gr
+            INNER JOIN base_roles br ON gr.role_name = br.role_name
+            WHERE br.first_night IS NOT NULL
+            ORDER BY br.first_night ASC
+        """).fetchall()
+
+    # JSON-Ausgabe der Rollen mit `role_name` und `first_night`
+    return jsonify([{"role_name": role["role_name"], "first_night": role["first_night"]} for role in roles])
+
+
+# Rollenaktionen setzen
+@app.route('/set_role_action', methods=['POST'])
+def set_role_action():
+    data = request.json
+    game_id = data.get('game_id')
+    role_name = data.get('role_name')
+    player_id = data.get('player_id')
+    action_name = data.get('action_name')
+    new_role = data.get('new_role')
+
+    if not game_id or not role_name or not player_id or not new_role:
+        return jsonify({"error": "Fehlende Daten"}), 400
+
+    with get_db_connection() as conn:
+        conn.execute("""
+            INSERT INTO role_actions (game_id, role_name, player_id, action_name, new_role)
+            VALUES (?, ?, ?, ?, ?)
+        """, (game_id, role_name, player_id, action_name, new_role))
+
+        conn.execute("""
+            UPDATE players SET role = ? WHERE id = ?
+        """, (new_role, player_id))
+
+        conn.commit()  # Änderungen speichern
+
+    return jsonify({"message": "Aktion erfolgreich gespeichert"}), 200
+
+
+
+
+
+# Synchronisiere Basisrollen mit JSON
+def sync_base_roles():
+    """Synchronisiert die Rollen aus der JSON-Datei mit der Tabelle base_roles."""
+    with sqlite3.connect("players.db") as conn:
+        cursor = conn.cursor()
+
+        # Rollen aus der JSON-Datei laden
+        with open("static/rollen/roles.json", "r", encoding="utf-8") as file:
+            roles_data = json.load(file)
+
+        # Synchronisation: Einfügen oder Aktualisieren
+        for role in roles_data:
+            cursor.execute("""
+                INSERT INTO base_roles (role_name, first_night, night_order, description)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(role_name) DO UPDATE SET
+                first_night = excluded.first_night,
+                night_order = excluded.night_order,
+                description = excluded.description
+            """, (
+                role["Rolle"],
+                role.get("first_night"),
+                role.get("night_order"),
+                role.get("Beschreibung")
+            ))
+        conn.commit()
+        print("Basisrollen erfolgreich synchronisiert!")
+
+
+@app.route('/kill_player', methods=['POST'])
+def kill_player():
+    """Ändert den Status eines Spielers auf 'tot'."""
+    data = request.json
+    player_id = data.get('player_id')
+
+    if not player_id:
+        return jsonify({"error": "Spieler-ID fehlt"}), 400
+
+    with get_db_connection() as conn:
+        conn.execute("""
+            UPDATE players SET status = 'tot' WHERE id = ?
+        """, (player_id,))
+        conn.commit()
+
+    return jsonify({"message": f"Spieler {player_id} wurde getötet."}), 200
+
+@app.route('/amor_action', methods=['POST'])
+def amor_action():
+    """Markiert zwei Spieler als verliebt."""
+    data = request.json
+    lover1_id = data.get('lover1_id')
+    lover2_id = data.get('lover2_id')
+
+    if not lover1_id or not lover2_id:
+        return jsonify({"error": "Spieler-IDs fehlen"}), 400
+
+    with get_db_connection() as conn:
+        conn.execute("UPDATE players SET in_love = TRUE WHERE id IN (?, ?)", (lover1_id, lover2_id))
+        conn.commit()
+
+    return jsonify({"message": "Die Spieler sind nun verliebt!"}), 200
 
 
 
 if __name__ == '__main__':
     init_db()  # Datenbank initialisieren
+    sync_base_roles()  # Basisrollen synchronisieren
     app.run(debug=True)
+
