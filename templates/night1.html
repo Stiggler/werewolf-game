@@ -87,9 +87,15 @@
                         {% endif %}
                     </td>
                     <td>{{ player.status }}</td>
+                    <td>
+                        <button onclick="killPlayer({{ player.id }})" 
+                                style="background-color: red; color: white; border: none; padding: 5px 10px; border-radius: 5px;">
+                            Töten
+                        </button>
+                    </td>
                 </tr>
                 {% endfor %}
-            </tbody>            
+            </tbody>                     
         </table>        
     </div>
     <div class="right-panel">
@@ -225,15 +231,50 @@ function updatePlayerTable() {
                 tr.innerHTML = `
                     <td><img src="${player.image}" alt="${player.name}" width="50"></td>
                     <td>${player.name}</td>
-                    <td>${player.role || 'Keine Rolle'}</td>
-                    <td><img src="/static/rollen/default.png" alt="Default" width="50"></td>
-                    <td>Lebendig</td>
+                    <td>${player.current_role || 'Keine Rolle'}</td>
+                    <td>
+                        ${player.original_role_image 
+                            ? `<img src="${player.original_role_image}" alt="${player.original_role}" width="50">` 
+                            : 'Keine Rolle'}
+                    </td>
+                    <td>${player.status || 'Unbekannt'}</td>
+                    <td>
+                        <button onclick="killPlayer(${player.id})" 
+                                style="background-color: red; color: white; border: none; padding: 5px 10px; border-radius: 5px;">
+                            Töten
+                        </button>
+                    </td>
                 `;
                 tbody.appendChild(tr);
             });
         })
         .catch(error => console.error('Fehler beim Aktualisieren der Tabelle:', error));
 }
+
+
+
+function killPlayer(playerId) {
+    if (!confirm('Möchtest du diesen Spieler wirklich töten?')) {
+        return; // Aktion abbrechen
+    }
+
+    fetch('/kill_player', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ player_id: playerId })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.message) {
+            alert(data.message);
+            updatePlayerTable(); // Tabelle aktualisieren
+        } else if (data.error) {
+            alert(`Fehler: ${data.error}`);
+        }
+    })
+    .catch(error => console.error('Fehler beim Töten des Spielers:', error));
+}
+
 
 
 

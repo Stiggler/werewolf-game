@@ -105,6 +105,7 @@ def reset_player_status():
         conn.commit()
     print("Spielerstatus wurde zurückgesetzt.")
 
+
 def update_player_status(player_id, new_status):
     """Aktualisiert den Status eines Spielers."""
     with get_db_connection() as conn:
@@ -138,22 +139,27 @@ def get_players_with_roles():
                 p.name, 
                 p.image, 
                 p.role AS current_role, 
+                p.status AS player_status,  -- Status des Spielers
                 (SELECT role_name FROM role_actions WHERE player_id = p.id ORDER BY timestamp ASC LIMIT 1) AS original_role
             FROM players p
         """).fetchall()
 
-    # Spielerinformationen erweitern
     return [
         {
             "id": player["id"],
             "name": player["name"],
             "image": player["image"],
             "current_role": player["current_role"],
+            "status": player["player_status"],  # Status aus der Datenbank
             "original_role": player["original_role"],
             "original_role_image": f"/static/rollen/{player['original_role'].lower().replace(' ', '_')}.png" if player["original_role"] else None
         }
         for player in players
     ]
+
+
+
+
 
 
 
@@ -294,9 +300,10 @@ def remove_from_pool():
 # Spieler abrufen
 @app.route('/players', methods=['GET'])
 def get_players():
-    with get_db_connection() as conn:
-        players = conn.execute("SELECT * FROM players").fetchall()
-    return jsonify([{"id": row["id"], "name": row["name"], "image": row["image"], "role": row["role"]} for row in players])
+    players = get_players_with_roles()
+    print("Abgerufene Spieler-Daten:", players)  # Debugging-Ausgabe
+    return jsonify(players)
+
 
 # Spieler zum aktiven Spiel hinzufügen
 @app.route('/add_to_players', methods=['POST'])
@@ -573,27 +580,27 @@ def set_role_action():
     game_id = data.get('game_id')
     role_name = data.get('role_name')
     player_id = data.get('player_id')
-    target_id = data.get('target_id')  # Optional
     action_name = data.get('action_name')
-    result = data.get('result', 'Erfolgreich')
-    new_role = data.get('new_role')  # Optional: Neue Rolle des Spielers
-    player_status = data.get('player_status', 'lebendig')  # Optional: Tot oder lebendig
+    new_role = data.get('new_role')
 
-    if not game_id or not role_name or not player_id or not action_name:
+    if not game_id or not role_name or not player_id or not new_role:
         return jsonify({"error": "Fehlende Daten"}), 400
 
-    # Aktion speichern
-    save_role_action(game_id, role_name, player_id, target_id, action_name, result, new_role, player_status)
+    with get_db_connection() as conn:
+        conn.execute("""
+            INSERT INTO role_actions (game_id, role_name, player_id, action_name, new_role)
+            VALUES (?, ?, ?, ?, ?)
+        """, (game_id, role_name, player_id, action_name, new_role))
 
-    # Spielerrolle aktualisieren, wenn eine neue Rolle angegeben ist
-    if new_role:
-        with get_db_connection() as conn:
-            conn.execute("""
-                UPDATE players SET role = ? WHERE id = ?
-            """, (new_role, player_id))
-            conn.commit()
+        conn.execute("""
+            UPDATE players SET role = ? WHERE id = ?
+        """, (new_role, player_id))
+
+        conn.commit()  # Änderungen speichern
 
     return jsonify({"message": "Aktion erfolgreich gespeichert"}), 200
+
+
 
 
 
@@ -624,6 +631,24 @@ def sync_base_roles():
             ))
         conn.commit()
         print("Basisrollen erfolgreich synchronisiert!")
+
+
+@app.route('/kill_player', methods=['POST'])
+def kill_player():
+    """Ändert den Status eines Spielers auf 'tot'."""
+    data = request.json
+    player_id = data.get('player_id')
+
+    if not player_id:
+        return jsonify({"error": "Spieler-ID fehlt"}), 400
+
+    with get_db_connection() as conn:
+        conn.execute("""
+            UPDATE players SET status = 'tot' WHERE id = ?
+        """, (player_id,))
+        conn.commit()
+
+    return jsonify({"message": f"Spieler {player_id} wurde getötet."}), 200
 
 
 if __name__ == '__main__':
