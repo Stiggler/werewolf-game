@@ -85,9 +85,15 @@ def init_db():
         # Spalte `in_love` hinzufügen, falls sie fehlt
         try:
             cursor.execute("ALTER TABLE players ADD COLUMN in_love BOOLEAN DEFAULT FALSE")
+            cursor.execute("ALTER TABLE players ADD COLUMN heal_potion INTEGER DEFAULT 1")
+            cursor.execute("ALTER TABLE players ADD COLUMN poison_potion INTEGER DEFAULT 1")            
         except sqlite3.OperationalError:
             print("Spalte `in_love` existiert bereits.")
-
+        try:
+            cursor.execute("ALTER TABLE players ADD COLUMN heal_potion INTEGER DEFAULT 1")
+            cursor.execute("ALTER TABLE players ADD COLUMN poison_potion INTEGER DEFAULT 1")            
+        except sqlite3.OperationalError:
+            print("Spalte `heal_potion` existiert bereits.")
     print("Datenbank initialisiert.")
 
 
@@ -685,10 +691,66 @@ def amor_action():
 
     return jsonify({"message": "Die Spieler sind nun verliebt!"}), 200
 
+@app.route('/werewolf_action', methods=['POST'])
+def werewolf_action():
+    """Markiert einen Spieler als tot durch die Werwölfe."""
+    data = request.json
+    victim_id = data.get('victim_id')
+
+    if not victim_id:
+        return jsonify({"error": "Spieler-ID fehlt"}), 400
+
+    with get_db_connection() as conn:
+        conn.execute("UPDATE players SET status = 'tot' WHERE id = ?", (victim_id,))
+        conn.commit()
+
+    return jsonify({"message": f"Spieler {victim_id} wurde von den Werwölfen getötet!"}), 200
+
+@app.route('/witch_action', methods=['POST'])
+def witch_action():
+    """Verarbeitet die Aktionen der Hexe: Heilen und/oder Töten."""
+    data = request.json
+    heal_target = data.get('heal_target')  # Spieler-ID für Heilung
+    poison_target = data.get('poison_target')  # Spieler-ID für Gift
+    player_id = data.get('player_id')  # Hexe selbst
+
+    if not player_id:
+        return jsonify({"error": "Hexen-ID fehlt"}), 400
+
+    with get_db_connection() as conn:
+        messages = []
+
+        # Heilaktion verarbeiten
+        if heal_target:
+            heal_potion = conn.execute("SELECT heal_potion FROM players WHERE id = ?", (player_id,)).fetchone()["heal_potion"]
+            if heal_potion > 0:
+                conn.execute("UPDATE players SET status = 'lebendig' WHERE id = ?", (heal_target,))
+                conn.execute("UPDATE players SET heal_potion = heal_potion - 1 WHERE id = ?", (player_id,))
+                messages.append(f"Spieler {heal_target} wurde geheilt!")
+            else:
+                messages.append("Keine Heiltränke mehr verfügbar.")
+
+        # Giftaktion verarbeiten
+        if poison_target:
+            poison_potion = conn.execute("SELECT poison_potion FROM players WHERE id = ?", (player_id,)).fetchone()["poison_potion"]
+            if poison_potion > 0:
+                conn.execute("UPDATE players SET status = 'tot' WHERE id = ?", (poison_target,))
+                conn.execute("UPDATE players SET poison_potion = poison_potion - 1 WHERE id = ?", (player_id,))
+                messages.append(f"Spieler {poison_target} wurde getötet!")
+            else:
+                messages.append("Keine Gifttränke mehr verfügbar.")
+
+        conn.commit()
+
+    return jsonify({"message": " ".join(messages)}), 200
+
+
 
 
 if __name__ == '__main__':
     init_db()  # Datenbank initialisieren
     sync_base_roles()  # Basisrollen synchronisieren
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=True)
 
+
+    

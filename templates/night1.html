@@ -155,13 +155,41 @@
     if (role.role_name === 'Dieb') {
         loadThiefPhase();
     } else if (role.role_name === 'Amor') {
-        fetch('/players') // Hole die Liste der Spieler
+        fetch('/players')
             .then(response => response.json())
             .then(players => loadAmorPhase(players));
+    
+    }
+    else if (role.role_name === 'Hexe') {
+    fetch('/players')
+        .then(response => response.json())
+        .then(players => loadWitchPhase(players));
+}
+
+
+    else if (role.role_name === 'Werwolf') {
+        // Überspringe die Aktion, wenn sie bereits ausgeführt wurde
+        if (!window.werewolfActionCompleted) {
+            fetch('/players')
+                .then(response => response.json())
+                .then(players => {
+                    loadWerewolfPhase(players);
+                    window.werewolfActionCompleted = true; // Markiere die Aktion als abgeschlossen
+                });
+        } else {
+            completeAction(); // Überspringe die Werwolf-Aktion
+        }
+        
     } else {
         roleContentDiv.textContent = `Aktion für die Rolle ${role.role_name} wird ausgeführt.`;
     }
 }
+
+function resetNightActions() {
+    window.werewolfActionCompleted = false; // Werwolf-Aktion zurücksetzen
+}
+
+
 
 
         function loadThiefPhase() {
@@ -350,6 +378,144 @@
         .catch(error => console.error('Fehler beim Aktualisieren der Tabelle:', error));
 }
 
+function loadWerewolfPhase(players) {
+    const roleContentDiv = document.getElementById('roleContent');
+    roleContentDiv.innerHTML = '<h3>Die Werwölfe erwachen und wählen ein Opfer</h3>';
+
+    const playerContainer = document.createElement('div');
+    playerContainer.style.display = "flex";
+    playerContainer.style.flexWrap = "wrap";
+    playerContainer.style.gap = "10px";
+
+    let selectedPlayer = null;
+
+    players.forEach(player => {
+        if (player.status === 'lebendig') {
+            const playerCard = document.createElement('div');
+            playerCard.style.border = "1px solid #ccc";
+            playerCard.style.padding = "10px";
+            playerCard.style.cursor = "pointer";
+            playerCard.style.display = "flex";
+            playerCard.style.flexDirection = "column";
+            playerCard.style.alignItems = "center";
+            playerCard.onclick = () => {
+                selectedPlayer = player.id;
+                Array.from(playerContainer.children).forEach(card => card.style.border = "1px solid #ccc");
+                playerCard.style.border = "2px solid red";
+            };
+
+            const img = document.createElement('img');
+            img.src = player.image;
+            img.alt = player.name;
+            img.style.width = "100px";
+            img.style.height = "100px";
+
+            const name = document.createElement('span');
+            name.textContent = player.name;
+
+            playerCard.appendChild(img);
+            playerCard.appendChild(name);
+            playerContainer.appendChild(playerCard);
+        }
+    });
+
+    const confirmButton = document.createElement('button');
+    confirmButton.textContent = 'Töten';
+    confirmButton.style.marginTop = "20px";
+    confirmButton.onclick = () => {
+        if (selectedPlayer) {
+            fetch('/werewolf_action', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ victim_id: selectedPlayer })
+            })
+            .then(response => response.json())
+            .then(data => {
+                alert(data.message);
+                updatePlayerTable(); // Aktualisiere die Tabelle
+                completeAction(); // Zur nächsten Aktion wechseln
+            })
+            .catch(error => console.error('Fehler bei der Werwolf-Aktion:', error));
+        } else {
+            alert('Bitte wähle ein Opfer aus.');
+        }
+    };
+
+    roleContentDiv.appendChild(playerContainer);
+    roleContentDiv.appendChild(confirmButton);
+}
+
+function loadWitchPhase(players) {
+    const roleContentDiv = document.getElementById('roleContent');
+    roleContentDiv.innerHTML = '<h3>Die Hexe erwacht</h3><p>Wähle einen Spieler, um ihn zu heilen.</p>';
+
+    // Spieler für Heilung auswählen
+    showPlayerSelection(players, 'heilen', (healTarget) => {
+        // Nach Heilung die Giftphase starten
+        if (healTarget) {
+            alert(`Spieler ${healTarget} wurde ausgewählt, um geheilt zu werden.`);
+        }
+        loadPoisonPhase(players, healTarget);
+    });
+}
+
+loadPoisonPhase
+
+
+function showPlayerSelection(players, action, onConfirm) {
+    const roleContentDiv = document.getElementById('roleContent');
+    roleContentDiv.innerHTML = `<h3>Wähle einen Spieler zum ${action}</h3>`;
+
+    const playerContainer = document.createElement('div');
+    playerContainer.style.display = "flex";
+    playerContainer.style.flexWrap = "wrap";
+    playerContainer.style.gap = "10px";
+
+    let selectedPlayer = null;
+
+    players.forEach(player => {
+        // Zeige Spieler entsprechend ihrer aktuellen Status
+        if ((action === 'heilen' && player.status === 'tot') || (action === 'töten' && player.status === 'lebendig')) {
+            const playerCard = document.createElement('div');
+            playerCard.style.border = "1px solid #ccc";
+            playerCard.style.padding = "10px";
+            playerCard.style.cursor = "pointer";
+            playerCard.style.display = "flex";
+            playerCard.style.flexDirection = "column";
+            playerCard.style.alignItems = "center";
+            playerCard.onclick = () => {
+                selectedPlayer = player.id;
+                Array.from(playerContainer.children).forEach(card => card.style.border = "1px solid #ccc");
+                playerCard.style.border = "2px solid red";
+            };
+
+            const img = document.createElement('img');
+            img.src = player.image;
+            img.alt = player.name;
+            img.style.width = "100px";
+
+            const name = document.createElement('span');
+            name.textContent = player.name;
+
+            playerCard.appendChild(img);
+            playerCard.appendChild(name);
+            playerContainer.appendChild(playerCard);
+        }
+    });
+
+    const confirmButton = document.createElement('button');
+    confirmButton.textContent = 'Bestätigen';
+    confirmButton.onclick = () => {
+        if (selectedPlayer) {
+            onConfirm(selectedPlayer);
+        } else {
+            alert('Bitte wähle einen Spieler aus.');
+        }
+    };
+
+    roleContentDiv.appendChild(playerContainer);
+    roleContentDiv.appendChild(confirmButton);
+}
 
 
 
