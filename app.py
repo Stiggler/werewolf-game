@@ -621,7 +621,6 @@ def night1():
 @app.route('/next_role', methods=['GET'])
 def get_next_role():
     with get_db_connection() as conn:
-        # Abrufen der Rollen aus `game_roles` mit den zugehörigen Daten aus `base_roles`
         roles = conn.execute("""
             SELECT gr.role_name, br.first_night
             FROM game_roles gr
@@ -630,8 +629,19 @@ def get_next_role():
             ORDER BY br.first_night ASC
         """).fetchall()
 
-    # JSON-Ausgabe der Rollen mit `role_name` und `first_night`
-    return jsonify([{"role_name": role["role_name"], "first_night": role["first_night"]} for role in roles])
+    expanded_roles = []
+    werewolf_added = False  # Flag, um sicherzustellen, dass Werwölfe nur einmal hinzugefügt werden
+
+    for role in roles:
+        if role["role_name"] == "Werwolf":
+            if not werewolf_added:
+                expanded_roles.append({"role_name": "Werwolf"})
+                werewolf_added = True
+        else:
+            expanded_roles.append({"role_name": role["role_name"]})
+
+    return jsonify(expanded_roles)
+
 
 
 @app.route('/set_role_action', methods=['POST'])

@@ -409,6 +409,21 @@ async function selectVictim(playerId) {
     const response = await fetch('/werewolf_action', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ game_id: 1, target_id: playerId })
+    });
+
+    const result = await response.json();
+    alert(result.message || result.error);
+    if (response.ok) {
+        updatePlayerTable();
+        completeAction();
+    }
+}
+
+async function selectVictim(playerId) {
+    const response = await fetch('/werewolf_action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ game_id: 1, target_id: playerId }) // Beispiel für game_id
     });
 
