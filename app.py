@@ -71,7 +71,7 @@ def init_db():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 game_id INTEGER NOT NULL,
                 role_name TEXT NOT NULL,
-                player_id INTEGER NOT NULL,
+                player_id INTEGER,
                 target_id INTEGER,
                 action_name TEXT NOT NULL,
                 result TEXT,
@@ -764,6 +764,73 @@ def amor_action():
     except Exception as e:
         print(f"Fehler bei der Amor-Aktion: {e}")
         return jsonify({"error": "Fehler bei der Amor-Aktion"}), 500
+
+@app.route('/werewolf_action', methods=['POST'])
+def werewolf_action():
+    """Werwölfe wählen gemeinsam ein Opfer und töten es."""
+    data = request.json
+    game_id = data.get('game_id')
+    target_id = data.get('target_id')  # ID des gewählten Opfers
+
+    if not game_id or not target_id:
+        return jsonify({"error": "Fehlende Daten"}), 400
+
+    try:
+        with get_db_connection() as conn:
+            # Prüfen, ob das Ziel noch lebt
+            player = conn.execute("""
+                SELECT id FROM players
+                WHERE id = ? AND status = 'lebendig'
+            """, (target_id,)).fetchone()
+
+            if not player:
+                return jsonify({"error": "Das ausgewählte Ziel ist nicht mehr lebendig."}), 400
+
+            # Spielerstatus auf tot setzen
+            conn.execute("""
+                UPDATE players
+                SET status = 'tot'
+                WHERE id = ?
+            """, (target_id,))
+            conn.commit()
+
+        # Dokumentiere die Aktion in der Tabelle role_actions
+        save_role_action(
+            game_id=game_id,
+            role_name="Werwolf",
+            player_id=None,  # Keine spezifische Spieler-ID, da es eine Gruppenaktion ist
+            target_id=target_id,
+            action_name="Werwolfopfer",
+            result="Spieler getötet"
+        )
+
+        return jsonify({"message": "Spieler wurde von den Werwölfen getötet."}), 200
+    except Exception as e:
+        print(f"Fehler bei der Werwolf-Aktion: {e}")
+        return jsonify({"error": "Fehler bei der Werwolf-Aktion"}), 500
+
+
+
+
+@app.route('/living_players', methods=['GET'])
+def get_living_players():
+    """Gibt alle lebenden Spieler aus der players-Tabelle zurück."""
+    try:
+        with get_db_connection() as conn:
+            players = conn.execute("""
+                SELECT id, name, image
+                FROM players
+                WHERE status = 'lebendig'
+            """).fetchall()
+
+        # Rückgabe der lebenden Spieler
+        return jsonify([
+            {"id": player["id"], "name": player["name"], "image": player["image"]}
+            for player in players
+        ]), 200
+    except Exception as e:
+        print(f"Fehler beim Abrufen der lebenden Spieler: {e}")
+        return jsonify({"error": "Fehler beim Abrufen der lebenden Spieler"}), 500
 
 
 

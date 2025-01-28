@@ -158,6 +158,10 @@
         fetch('/players') // Hole die Liste der Spieler
             .then(response => response.json())
             .then(players => loadAmorPhase(players));
+        } else if (role.role_name === 'Werwolf') {
+    fetch('/living_players')
+        .then(response => response.json())
+        .then(players => loadWerewolfPhase(players));
     } else {
         roleContentDiv.textContent = `Aktion für die Rolle ${role.role_name} wird ausgeführt.`;
     }
@@ -348,6 +352,72 @@
             });
         })
         .catch(error => console.error('Fehler beim Aktualisieren der Tabelle:', error));
+}
+
+async function fetchLivingPlayers() {
+    const response = await fetch('/living_players');
+    const players = await response.json();
+
+    const playerList = document.getElementById('playerList');
+    playerList.innerHTML = ''; // Alte Einträge entfernen
+
+    players.forEach(player => {
+        const button = document.createElement('button');
+        button.textContent = player.name;
+        button.onclick = () => selectVictim(player.id);
+        playerList.appendChild(button);
+    });
+}
+
+async function loadWerewolfPhase(players) {
+    const roleContentDiv = document.getElementById('roleContent');
+    roleContentDiv.innerHTML = '<h3>Werwölfe erwachen und wählen ein Opfer</h3>';
+
+    const playerContainer = document.createElement('div');
+    playerContainer.style.display = "flex";
+    playerContainer.style.flexWrap = "wrap";
+    playerContainer.style.gap = "10px";
+
+    players.forEach(player => {
+        const playerCard = document.createElement('div');
+        playerCard.style.border = "1px solid #ccc";
+        playerCard.style.padding = "10px";
+        playerCard.style.cursor = "pointer";
+        playerCard.style.display = "flex";
+        playerCard.style.flexDirection = "column";
+        playerCard.style.alignItems = "center";
+        playerCard.onclick = () => selectVictim(player.id);
+
+        const img = document.createElement('img');
+        img.src = player.image;
+        img.alt = player.name;
+        img.style.width = "100px";
+        img.style.height = "100px";
+
+        const name = document.createElement('span');
+        name.textContent = player.name;
+
+        playerCard.appendChild(img);
+        playerCard.appendChild(name);
+        playerContainer.appendChild(playerCard);
+    });
+
+    roleContentDiv.appendChild(playerContainer);
+}
+
+async function selectVictim(playerId) {
+    const response = await fetch('/werewolf_action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ game_id: 1, target_id: playerId }) // Beispiel für game_id
+    });
+
+    const result = await response.json();
+    alert(result.message || result.error);
+    if (response.ok) {
+        updatePlayerTable(); // Tabelle aktualisieren
+        completeAction(); // Zur nächsten Aktion wechseln
+    }
 }
 
 
