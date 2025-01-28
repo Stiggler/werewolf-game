@@ -99,7 +99,17 @@ def init_db():
             cursor.execute("ALTER TABLE role_actions ADD COLUMN phase_type TEXT DEFAULT Nacht")
         except sqlite3.OperationalError:
             print("Spalte  existiert bereits.")
+        try:
+            cursor.execute("ALTER TABLE players ADD COLUMN witch_heal INTEGER DEFAULT NULL")
+            print("Spalte 'witch_heal' hinzugefügt.")
+        except sqlite3.OperationalError:
+            print("Spalte 'witch_heal' existiert bereits.")
 
+        try:
+            cursor.execute("ALTER TABLE players ADD COLUMN witch_poison INTEGER DEFAULT NULL")
+            print("Spalte 'witch_poison' hinzugefügt.")
+        except sqlite3.OperationalError:
+            print("Spalte 'witch_poison' existiert bereits.")
     print("Datenbank initialisiert.")
 
 
@@ -593,9 +603,22 @@ def start_game():
         # Spielerstatus und Verliebtheitsstatus zurücksetzen
         conn.execute("UPDATE players SET status = 'lebendig', in_love = FALSE")
 
+        # Hexentränke zurücksetzen
+        conn.execute("""
+            UPDATE players
+            SET witch_heal = 1, witch_poison = 1
+            WHERE role = 'Hexe'
+        """)
+
+        conn.execute("""
+            UPDATE players
+            SET witch_heal = NULL, witch_poison = NULL
+            WHERE role != 'Hexe'
+        """)
+
         conn.commit()
 
-    return jsonify({"message": "Spiel gestartet und Aktionen zurückgesetzt"})
+    return jsonify({"message": "Spiel gestartet und Aktionen zurückgesetzt"}), 200
 
 
 
@@ -621,6 +644,7 @@ def night1():
 @app.route('/next_role', methods=['GET'])
 def get_next_role():
     with get_db_connection() as conn:
+        # Rollen aus der Datenbank abrufen
         roles = conn.execute("""
             SELECT gr.role_name, br.first_night
             FROM game_roles gr
@@ -630,17 +654,25 @@ def get_next_role():
         """).fetchall()
 
     expanded_roles = []
-    werewolf_added = False  # Flag, um sicherzustellen, dass Werwölfe nur einmal hinzugefügt werden
+    werewolf_added = False  # Flag, um Werwölfe nur einmal hinzuzufügen
 
     for role in roles:
-        if role["role_name"] == "Werwolf":
+        if role["role_name"] == "Hexe":
+            # Hexe mit zwei getrennten Aktionen hinzufügen
+            expanded_roles.append({"role_name": "Hexe", "action": "heal"})
+            expanded_roles.append({"role_name": "Hexe", "action": "poison"})
+        elif role["role_name"] == "Werwolf":
+            # Werwölfe nur einmal hinzufügen
             if not werewolf_added:
                 expanded_roles.append({"role_name": "Werwolf"})
                 werewolf_added = True
         else:
+            # Andere Rollen wie gewohnt hinzufügen
             expanded_roles.append({"role_name": role["role_name"]})
 
+    # JSON-Ausgabe der Rollenliste
     return jsonify(expanded_roles)
+
 
 
 
@@ -842,6 +874,77 @@ def get_living_players():
         print(f"Fehler beim Abrufen der lebenden Spieler: {e}")
         return jsonify({"error": "Fehler beim Abrufen der lebenden Spieler"}), 500
 
+@app.route('/get_killed_players', methods=['GET'])
+def get_killed_players():
+    """Gibt alle getöteten Spieler der aktuellen Nacht zurück."""
+    with get_db_connection() as conn:
+        killed_players = conn.execute("""
+            SELECT p.id, p.name, p.image
+            FROM players p
+            JOIN role_actions ra ON p.id = ra.target_id
+            WHERE ra.phase_type = 'Nacht' AND ra.phase_number = ? AND p.status = 'tot'
+        """, (phase_number,)).fetchall()
+
+    return jsonify([{"id": player["id"], "name": player["name"], "image": player["image"]} for player in killed_players])
+
+@app.route('/heal_action', methods=['POST'])
+def heal_action():
+    """Hexe verwendet den Heiltrank, um einen Spieler zu heilen."""
+    data = request.json
+    game_id = data.get('game_id')
+    witch_id = data.get('witch_id')
+    target_id = data.get('target_id')  # Spieler, der geheilt werden soll
+
+    if not all([game_id, witch_id, target_id]):
+        return jsonify({"error": "Fehlende Daten"}), 400
+
+    try:
+        with get_db_connection() as conn:
+            # Prüfen, ob die Hexe den Heiltrank noch hat
+            witch = conn.execute("""
+                SELECT witch_heal FROM players WHERE id = ? AND role = 'Hexe'
+            """, (witch_id,)).fetchone()
+
+            if not witch:
+                # Hexe nicht gefunden, aus der Datenbank abrufen
+                witch_data = conn.execute("""
+                    SELECT id FROM players WHERE role = 'Hexe' LIMIT 1
+                """).fetchone()
+
+                if witch_data:
+                    witch_id = witch_data["id"]
+                else:
+                    return jsonify({"error": "Hexe nicht gefunden"}), 400
+
+            if witch["witch_heal"] != 1:
+                return jsonify({"error": "Heiltrank nicht verfügbar oder bereits verwendet"}), 400
+
+            # Spielerstatus auf lebendig setzen
+            conn.execute("""
+                UPDATE players SET status = 'lebendig' WHERE id = ?
+            """, (target_id,))
+
+            # Heiltrank der Hexe aufgebraucht markieren
+            conn.execute("""
+                UPDATE players SET witch_heal = 0 WHERE id = ?
+            """, (witch_id,))
+
+            # Aktion in der Tabelle role_actions dokumentieren
+            save_role_action(
+                game_id=game_id,
+                role_name="Hexe",
+                player_id=witch_id,
+                target_id=target_id,
+                action_name="Heiltrank verwendet",
+                result=f"Spieler {target_id} wurde geheilt"
+            )
+
+            conn.commit()
+
+        return jsonify({"message": "Spieler wurde erfolgreich geheilt"}), 200
+    except Exception as e:
+        print(f"Fehler bei der Heiltrank-Aktion: {e}")
+        return jsonify({"error": "Fehler bei der Heiltrank-Aktion"}), 500
 
 
 # Aktualisierte Route zur Demonstration des Phasenwechsels und Abschluss der Nacht
@@ -865,6 +968,9 @@ def switch_phase():
             "message": f"Es gibt noch {actions_remaining} offene Aktionen.",
             "button": None
         }), 200
+
+
+
 
 
 if __name__ == '__main__':
