@@ -77,6 +77,8 @@ def init_db():
                 result TEXT,
                 new_role TEXT,
                 player_status TEXT DEFAULT 'lebendig',
+                phase_number INTEGER NOT NULL,
+                phase_type TEXT NOT NULL,
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (player_id) REFERENCES players (id),
                 FOREIGN KEY (target_id) REFERENCES players (id)
@@ -88,8 +90,32 @@ def init_db():
         except sqlite3.OperationalError:
             print("Spalte `in_love` existiert bereits.")
 
+        try:
+            cursor.execute("ALTER TABLE role_actions ADD COLUMN phase_number INTEGER DEFAULT 1")
+        except sqlite3.OperationalError:
+            print("Spalte  existiert bereits.")
+
+        try:
+            cursor.execute("ALTER TABLE role_actions ADD COLUMN phase_type TEXT DEFAULT Nacht")
+        except sqlite3.OperationalError:
+            print("Spalte  existiert bereits.")
+
     print("Datenbank initialisiert.")
 
+
+
+def ensure_columns_exist():
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        try:
+            cursor.execute("ALTER TABLE role_actions ADD COLUMN phase_type TEXT NOT NULL DEFAULT 'Nacht'")
+        except sqlite3.OperationalError:
+            print("Spalte 'phase_type' existiert bereits.")
+
+        try:
+            cursor.execute("ALTER TABLE role_actions ADD COLUMN phase_number INTEGER NOT NULL DEFAULT 1")
+        except sqlite3.OperationalError:
+            print("Spalte 'phase_number' existiert bereits.")
 
 
 # Verbindung zur Datenbank abrufen
@@ -179,15 +205,31 @@ def get_players_with_roles():
     detailed_players.sort(key=lambda x: x["first_night"])
     return detailed_players
 
+# Phase aktualisieren
+def next_phase():
+    global phase_number, current_phase
+    if current_phase == "Nacht":
+        current_phase = "Tag"
+    else:
+        current_phase = "Nacht"
+        phase_number += 1
+    return current_phase, phase_number
+
+# Globale Variablen initialisieren
+phase_number = 1
+current_phase = "Nacht"
+
 # Rollenaktionen speichern
 def save_role_action(game_id, role_name, player_id, target_id, action_name, result, new_role=None, player_status=None):
-    """Speichert die Aktion einer Rolle sowie den Status des Spielers in der Tabelle role_actions."""
+    global phase_number, current_phase  # Globale Variablen referenzieren
     with get_db_connection() as conn:
         conn.execute("""
-            INSERT INTO role_actions (game_id, role_name, player_id, target_id, action_name, result, new_role, player_status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (game_id, role_name, player_id, target_id, action_name, result, new_role, player_status))
+            INSERT INTO role_actions (game_id, role_name, player_id, target_id, action_name, result, new_role, player_status, phase_number, phase_type)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (game_id, role_name, player_id, target_id, action_name, result, new_role, player_status, phase_number, current_phase))
         conn.commit()
+
+
 
 # Spielattribute speichern
 def save_game_attribute(game_id, attribute_name, value, player_id=None, role_id=None):
@@ -592,7 +634,6 @@ def get_next_role():
     return jsonify([{"role_name": role["role_name"], "first_night": role["first_night"]} for role in roles])
 
 
-# Rollenaktionen setzen
 @app.route('/set_role_action', methods=['POST'])
 def set_role_action():
     data = request.json
@@ -602,22 +643,27 @@ def set_role_action():
     action_name = data.get('action_name')
     new_role = data.get('new_role')
 
-    if not game_id or not role_name or not player_id or not new_role:
+    if not all([game_id, role_name, player_id, action_name, new_role]):
         return jsonify({"error": "Fehlende Daten"}), 400
 
-    with get_db_connection() as conn:
-        conn.execute("""
-            INSERT INTO role_actions (game_id, role_name, player_id, action_name, new_role)
-            VALUES (?, ?, ?, ?, ?)
-        """, (game_id, role_name, player_id, action_name, new_role))
+    try:
+        # Rolle in der Tabelle role_actions speichern
+        save_role_action(game_id, role_name, player_id, None, action_name, None, new_role)
 
-        conn.execute("""
-            UPDATE players SET role = ? WHERE id = ?
-        """, (new_role, player_id))
+        # Rolle in der Tabelle players aktualisieren
+        with get_db_connection() as conn:
+            conn.execute("""
+                UPDATE players
+                SET role = ?
+                WHERE id = ?
+            """, (new_role, player_id))
+            conn.commit()
 
-        conn.commit()  # Änderungen speichern
+        return jsonify({"message": "Rolle erfolgreich aktualisiert."}), 200
+    except Exception as e:
+        print(f"Fehler beim Setzen der Rollenaktion: {e}")
+        return jsonify({"error": "Fehler beim Setzen der Rollenaktion"}), 500
 
-    return jsonify({"message": "Aktion erfolgreich gespeichert"}), 200
 
 
 
@@ -671,20 +717,77 @@ def kill_player():
 
 @app.route('/amor_action', methods=['POST'])
 def amor_action():
-    """Markiert zwei Spieler als verliebt."""
     data = request.json
+    print("Empfangene Daten:", data)  # Debugging
+
+    amor_id = data.get('amor_id')
     lover1_id = data.get('lover1_id')
     lover2_id = data.get('lover2_id')
+
+    if not amor_id:
+        # Rückfall: Suche Amor-Spieler in der Datenbank
+        with get_db_connection() as conn:
+            amor_player = conn.execute("SELECT id FROM players WHERE role = 'Amor' LIMIT 1").fetchone()
+            if amor_player:
+                amor_id = amor_player['id']
+            else:
+                return jsonify({"error": "Amor-Spieler nicht gefunden"}), 400
 
     if not lover1_id or not lover2_id:
         return jsonify({"error": "Spieler-IDs fehlen"}), 400
 
+    try:
+        with get_db_connection() as conn:
+            # Spieler als verliebt markieren
+            conn.execute("UPDATE players SET in_love = TRUE WHERE id IN (?, ?)", (lover1_id, lover2_id))
+            conn.commit()
+
+        # Aktion in der role_actions-Tabelle dokumentieren
+        save_role_action(
+            game_id=1,
+            role_name="Amor",
+            player_id=amor_id,
+            target_id=lover1_id,
+            action_name="Verliebt gemacht",
+            result=f"Verliebt mit Spieler-ID {lover2_id}"
+        )
+        save_role_action(
+            game_id=1,
+            role_name="Amor",
+            player_id=amor_id,
+            target_id=lover2_id,
+            action_name="Verliebt gemacht",
+            result=f"Verliebt mit Spieler-ID {lover1_id}"
+        )
+
+        return jsonify({"message": "Die Spieler sind nun verliebt!"}), 200
+    except Exception as e:
+        print(f"Fehler bei der Amor-Aktion: {e}")
+        return jsonify({"error": "Fehler bei der Amor-Aktion"}), 500
+
+
+
+# Aktualisierte Route zur Demonstration des Phasenwechsels und Abschluss der Nacht
+@app.route('/next_phase', methods=['POST'])
+def switch_phase():
     with get_db_connection() as conn:
-        conn.execute("UPDATE players SET in_love = TRUE WHERE id IN (?, ?)", (lover1_id, lover2_id))
-        conn.commit()
+        # Überprüfe, ob alle Rollenaktionen abgeschlossen sind
+        actions_remaining = conn.execute("""
+            SELECT COUNT(*) FROM role_actions
+            WHERE phase_number = ? AND phase_type = ?
+        """, (phase_number, current_phase)).fetchone()[0]
 
-    return jsonify({"message": "Die Spieler sind nun verliebt!"}), 200
-
+    if actions_remaining == 0:
+        next_phase()  # Wechsel zur nächsten Phase
+        return jsonify({
+            "message": f"Phase gewechselt: {current_phase} {phase_number}",
+            "button": "Nacht ist fertig!"
+        }), 200
+    else:
+        return jsonify({
+            "message": f"Es gibt noch {actions_remaining} offene Aktionen.",
+            "button": None
+        }), 200
 
 
 if __name__ == '__main__':
