@@ -1063,6 +1063,18 @@ def switch_phase():
             "button": None
         }), 200
 
+@app.route('/seer_action', methods=['GET'])
+def seer_action():
+    """Gibt die Liste aller lebenden Spieler für die Seherin zurück."""
+    with get_db_connection() as conn:
+        players = conn.execute("""
+            SELECT id, name, image, role AS current_role 
+            FROM players 
+            WHERE status = 'lebendig'
+        """).fetchall()
+        
+        return jsonify([dict(player) for player in players])
+
 
 
 

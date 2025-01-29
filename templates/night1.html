@@ -181,7 +181,11 @@
                 .then(response => response.json())
                 .then(players => loadWitchPoisonPhase(players));
         }
-    } else {
+       
+    } 
+    else if (role.role_name === 'Seherin') {
+    loadSeerPhase();
+    }   else {
         roleContentDiv.textContent = `Aktion für die Rolle ${role.role_name} wird ausgeführt.`;
     }
 }
@@ -656,6 +660,59 @@ function usePoisonTrank(playerId) {
     .catch(error => console.error('❌ Fehler bei der Gifttrank-Aktion:', error));
 }
 
+function loadSeerPhase() {
+    fetch('/seer_action')
+        .then(response => response.json())
+        .then(players => {
+            const roleContentDiv = document.getElementById('roleContent');
+            roleContentDiv.innerHTML = '<h3>Seherin: Wähle einen Spieler, um seine Rolle zu sehen</h3>';
+
+            const playerContainer = document.createElement('div');
+            playerContainer.style.display = "flex";
+            playerContainer.style.flexWrap = "wrap";
+            playerContainer.style.gap = "10px";
+
+            players.forEach(player => {
+                const playerCard = document.createElement('div');
+                playerCard.style.border = "1px solid #ccc";
+                playerCard.style.padding = "10px";
+                playerCard.style.cursor = "pointer";
+                playerCard.style.display = "flex";
+                playerCard.style.flexDirection = "column";
+                playerCard.style.alignItems = "center";
+                playerCard.onclick = () => revealRole(player);
+
+                const img = document.createElement('img');
+                img.src = player.image;
+                img.alt = player.name;
+                img.style.width = "100px";
+                img.style.height = "100px";
+
+                const name = document.createElement('span');
+                name.textContent = player.name;
+
+                playerCard.appendChild(img);
+                playerCard.appendChild(name);
+                playerContainer.appendChild(playerCard);
+            });
+
+            roleContentDiv.appendChild(playerContainer);
+        })
+        .catch(error => console.error('Fehler beim Laden der Seherin-Aktion:', error));
+}
+
+function revealRole(player) {
+    const roleContentDiv = document.getElementById('roleContent');
+    roleContentDiv.innerHTML = `
+        <h2>${player.name} ist...</h2>
+        <div style="text-align: center;">
+            <img src="/static/rollen/${player.current_role.toLowerCase().replace(' ', '_')}.png" 
+                 alt="${player.current_role}" style="width: 200px;">
+            <h1>${player.current_role}</h1>
+        </div>
+        <button onclick="loadSeerPhase()" style="margin-top: 20px;">Zurück</button>
+    `;
+}
 
 
         function killPlayer(playerId) {
