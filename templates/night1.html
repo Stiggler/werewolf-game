@@ -62,9 +62,10 @@
 </head>
 <body>
     <script>
-        // Spieler-ID des Diebs (dynamisch aus dem Backend übergeben)
-        const CURRENT_PLAYER_ID = "{{ thief_player_id | default('null') }}";
+        const CURRENT_PLAYER_ID = "{{ thief_player_id | default('null') }}"; // Für Dieb
+        let WITCH_PLAYER_ID = null;  // 🔥 Jetzt eigene ID für die Hexe
     </script>
+    
 
     <div class="left-panel">
         <table id="playersTable">
@@ -158,6 +159,19 @@
         fetch('/players') // Hole die Liste der Spieler
             .then(response => response.json())
             .then(players => loadAmorPhase(players));
+    } else if (role.role_name === 'Werwolf') {
+        fetch('/living_players')
+            .then(response => response.json())
+            .then(players => loadWerewolfPhase(players));
+    } else if (role.role_name === 'Hexe') {
+        // Hexe: Unterscheide zwischen Heiltrank und Gifttrank
+        if (role.action === 'heal') {
+            loadWitchHealPhase();
+        } else if (role.action === 'poison') {
+            fetch('/living_players')
+                .then(response => response.json())
+                .then(players => loadWitchPoisonPhase(players));
+        }
     } else {
         roleContentDiv.textContent = `Aktion für die Rolle ${role.role_name} wird ausgeführt.`;
     }
@@ -281,6 +295,30 @@
     roleContentDiv.appendChild(confirmButton);
 }
 
+function setWitchPlayerId(callback) {
+    fetch('/players')
+        .then(response => response.json())
+        .then(players => {
+            console.log("🔍 Spieler aus API:", players);
+
+            let witch = players.find(player => player.current_role === "Hexe");
+            if (witch) {
+                WITCH_PLAYER_ID = witch.id;
+                console.log("✅ Hexen-ID gefunden:", WITCH_PLAYER_ID);
+                if (callback) callback();
+            } else {
+                console.warn("❌ Keine Hexe gefunden!");
+            }
+        })
+        .catch(error => console.error("❌ Fehler beim Abrufen der Spieler:", error));
+}
+
+// 🔥 Diese Funktion direkt beim Laden der Seite ausführen
+document.addEventListener("DOMContentLoaded", () => {
+    console.log("🔄 Starte setWitchPlayerId...");
+    setWitchPlayerId();
+});
+
 
 
         function completeAction() {
@@ -350,6 +388,262 @@
         .catch(error => console.error('Fehler beim Aktualisieren der Tabelle:', error));
 }
 
+async function fetchLivingPlayers() {
+    const response = await fetch('/living_players');
+    const players = await response.json();
+
+    const playerList = document.getElementById('playerList');
+    playerList.innerHTML = ''; // Alte Einträge entfernen
+
+    players.forEach(player => {
+        const button = document.createElement('button');
+        button.textContent = player.name;
+        button.onclick = () => selectVictim(player.id);
+        playerList.appendChild(button);
+    });
+}
+
+async function loadWerewolfPhase(players) {
+    const roleContentDiv = document.getElementById('roleContent');
+    roleContentDiv.innerHTML = '<h3>Werwölfe erwachen und wählen ein Opfer</h3>';
+
+    const playerContainer = document.createElement('div');
+    playerContainer.style.display = "flex";
+    playerContainer.style.flexWrap = "wrap";
+    playerContainer.style.gap = "10px";
+
+    players.forEach(player => {
+        const playerCard = document.createElement('div');
+        playerCard.style.border = "1px solid #ccc";
+        playerCard.style.padding = "10px";
+        playerCard.style.cursor = "pointer";
+        playerCard.style.display = "flex";
+        playerCard.style.flexDirection = "column";
+        playerCard.style.alignItems = "center";
+        playerCard.onclick = () => selectVictim(player.id);
+
+        const img = document.createElement('img');
+        img.src = player.image;
+        img.alt = player.name;
+        img.style.width = "100px";
+        img.style.height = "100px";
+
+        const name = document.createElement('span');
+        name.textContent = player.name;
+
+        playerCard.appendChild(img);
+        playerCard.appendChild(name);
+        playerContainer.appendChild(playerCard);
+    });
+
+    roleContentDiv.appendChild(playerContainer);
+}
+
+async function selectVictim(playerId) {
+    const response = await fetch('/werewolf_action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ game_id: 1, target_id: playerId })
+    });
+
+    const result = await response.json();
+    alert(result.message || result.error);
+    if (response.ok) {
+        updatePlayerTable();
+        completeAction();
+    }
+}
+
+async function selectVictim(playerId) {
+    const response = await fetch('/werewolf_action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ game_id: 1, target_id: playerId }) // Beispiel für game_id
+    });
+
+    const result = await response.json();
+    alert(result.message || result.error);
+    if (response.ok) {
+        updatePlayerTable(); // Tabelle aktualisieren
+        completeAction(); // Zur nächsten Aktion wechseln
+    }
+}
+
+function useHealTrank(playerId) {
+    console.log("🔍 Vor Trank-Nutzung - Hexen-ID:", WITCH_PLAYER_ID);
+
+    if (!WITCH_PLAYER_ID) {
+        console.error("❌ Hexen-ID ist nicht gesetzt! Lade sie erneut...");
+        setWitchPlayerId(() => useHealTrank(playerId)); // Falls die ID fehlt, nochmal laden
+        return;
+    }
+
+    console.log("🧙‍♀️ Hexen-ID:", WITCH_PLAYER_ID);
+
+    fetch('/heal_action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            game_id: 1,  
+            witch_id: WITCH_PLAYER_ID,  // ID der Hexe
+            target_id: playerId
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.message) {
+            alert(data.message);
+            updatePlayerTable();
+            completeAction();
+        } else {
+            alert(data.error);
+        }
+    })
+    .catch(error => console.error('Fehler bei der Heiltrank-Aktion:', error));
+}
+
+
+function loadWitchHealPhase() {
+    fetch('/get_killed_players')
+        .then(response => response.json())
+        .then(players => {
+            const roleContentDiv = document.getElementById('roleContent');
+            roleContentDiv.innerHTML = '<h3>Hexe: Heiltrank verwenden</h3>';
+
+            if (players.length === 0) {
+                roleContentDiv.innerHTML += '<p>Es gibt keine Spieler, die geheilt werden können.</p>';
+                return;
+            }
+
+            players.forEach(player => {
+                const playerCard = document.createElement('div');
+                playerCard.style.border = "1px solid #ccc";
+                playerCard.style.padding = "10px";
+                playerCard.style.margin = "10px 0";
+                playerCard.style.display = "flex";
+                playerCard.style.alignItems = "center";
+                playerCard.style.gap = "10px";
+
+                const img = document.createElement('img');
+                img.src = player.image;
+                img.alt = player.name;
+                img.style.width = "50px";
+
+                const name = document.createElement('span');
+                name.textContent = player.name;
+
+                const healButton = document.createElement('button');
+                healButton.textContent = 'Heilen';
+                healButton.style.backgroundColor = "green";
+                healButton.style.color = "white";
+                healButton.onclick = () => useHealTrank(player.id);
+
+                playerCard.appendChild(img);
+                playerCard.appendChild(name);
+                playerCard.appendChild(healButton);
+                roleContentDiv.appendChild(playerCard);
+            });
+
+            // 🔥 "Nicht heilen"-Button hinzufügen
+            const skipButton = document.createElement('button');
+            skipButton.textContent = 'Nicht heilen';
+            skipButton.style.marginTop = "20px";
+            skipButton.style.backgroundColor = "gray";
+            skipButton.style.color = "white";
+            skipButton.onclick = () => completeAction(); // 🔥 Springt zur nächsten Phase
+
+            roleContentDiv.appendChild(skipButton);
+        })
+        .catch(error => console.error('Fehler beim Laden der getöteten Spieler:', error));
+}
+
+
+
+function loadWitchPoisonPhase(players) {
+    const roleContentDiv = document.getElementById('roleContent');
+    roleContentDiv.innerHTML = '<h3>Hexe: Gifttrank verwenden</h3>';
+
+    players.forEach(player => {
+        const playerCard = document.createElement('div');
+        playerCard.style.border = "1px solid #ccc";
+        playerCard.style.padding = "10px";
+        playerCard.style.margin = "10px 0";
+        playerCard.style.display = "flex";
+        playerCard.style.alignItems = "center";
+        playerCard.style.gap = "10px";
+
+        const img = document.createElement('img');
+        img.src = player.image;
+        img.alt = player.name;
+        img.style.width = "50px";
+
+        const name = document.createElement('span');
+        name.textContent = player.name;
+
+        const poisonButton = document.createElement('button');
+        poisonButton.textContent = 'Vergiften';
+        poisonButton.style.backgroundColor = "red";
+        poisonButton.style.color = "white";
+        poisonButton.onclick = () => usePoisonTrank(player.id);
+
+        playerCard.appendChild(img);
+        playerCard.appendChild(name);
+        playerCard.appendChild(poisonButton);
+        roleContentDiv.appendChild(playerCard);
+    });
+
+    // 🔥 "Niemanden vergiften"-Button hinzufügen
+    const skipButton = document.createElement('button');
+    skipButton.textContent = 'Niemanden vergiften';
+    skipButton.style.marginTop = "20px";
+    skipButton.style.backgroundColor = "gray";
+    skipButton.style.color = "white";
+    skipButton.onclick = () => completeAction(); // 🔥 Springt zur nächsten Phase
+
+    roleContentDiv.appendChild(skipButton);
+}
+
+
+
+
+
+function usePoisonTrank(playerId) {
+    console.log("🔍 Vor Gifttrank-Nutzung - Hexen-ID:", WITCH_PLAYER_ID);
+
+    if (!WITCH_PLAYER_ID) {
+        console.error("❌ Hexen-ID ist nicht gesetzt! Lade sie erneut...");
+        setWitchPlayerId(() => usePoisonTrank(playerId)); // Falls die ID fehlt, nochmal laden
+        return;
+    }
+
+    console.log("🧙‍♀️ Hexen-ID:", WITCH_PLAYER_ID);
+
+    fetch('/poison_action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            game_id: 1,  
+            witch_id: WITCH_PLAYER_ID,  // Hexen-ID
+            target_id: playerId
+        })
+    })
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(err => { throw err; });
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.message) {
+            alert(data.message);
+            updatePlayerTable();  // Tabelle aktualisieren
+            completeAction();  // Zur nächsten Aktion wechseln
+        } else {
+            alert(data.error);
+        }
+    })
+    .catch(error => console.error('❌ Fehler bei der Gifttrank-Aktion:', error));
+}
 
 
 

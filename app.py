@@ -71,7 +71,7 @@ def init_db():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 game_id INTEGER NOT NULL,
                 role_name TEXT NOT NULL,
-                player_id INTEGER NOT NULL,
+                player_id INTEGER,
                 target_id INTEGER,
                 action_name TEXT NOT NULL,
                 result TEXT,
@@ -99,7 +99,17 @@ def init_db():
             cursor.execute("ALTER TABLE role_actions ADD COLUMN phase_type TEXT DEFAULT Nacht")
         except sqlite3.OperationalError:
             print("Spalte  existiert bereits.")
+        try:
+            cursor.execute("ALTER TABLE players ADD COLUMN witch_heal INTEGER DEFAULT NULL")
+            print("Spalte 'witch_heal' hinzugefügt.")
+        except sqlite3.OperationalError:
+            print("Spalte 'witch_heal' existiert bereits.")
 
+        try:
+            cursor.execute("ALTER TABLE players ADD COLUMN witch_poison INTEGER DEFAULT NULL")
+            print("Spalte 'witch_poison' hinzugefügt.")
+        except sqlite3.OperationalError:
+            print("Spalte 'witch_poison' existiert bereits.")
     print("Datenbank initialisiert.")
 
 
@@ -120,9 +130,10 @@ def ensure_columns_exist():
 
 # Verbindung zur Datenbank abrufen
 def get_db_connection():
-    conn = sqlite3.connect("players.db")
-    conn.row_factory = sqlite3.Row  # Ermöglicht den Zugriff auf Spaltennamen
+    conn = sqlite3.connect('players.db', timeout=10)  # 🔥 Timeout von 10 Sekunden setzen
+    conn.row_factory = sqlite3.Row
     return conn
+
 
 
 def clear_role_actions():
@@ -494,42 +505,79 @@ def gameoverview():
 def random_assign_roles():
     try:
         with get_db_connection() as conn:
-            # Spieler und Rollen abrufen
-            players = conn.execute("SELECT id FROM players").fetchall()
-            roles = conn.execute("SELECT role_name, instance_id FROM game_roles").fetchall()
+            # 🔥 **Alle bisherigen Rollen in `players` zurücksetzen**
+            conn.execute("UPDATE players SET role = NULL")
 
-            # Tabelle thief_cards leeren
+            # 🔥 **Tabelle `thief_cards` komplett leeren**
             conn.execute("DELETE FROM thief_cards")
 
-            # Diebeskarten extrahieren
+            # 🟢 **Spieler abrufen**
+            players = conn.execute("SELECT id FROM players").fetchall()
+            players = [player["id"] for player in players]  # In Liste umwandeln
+
+            # 🟢 **Rollen abrufen**
+            roles = conn.execute("SELECT role_name FROM game_roles").fetchall()
+            roles = [role["role_name"] for role in roles]  # In Liste umwandeln
+
+            print(f"🎲 Vor Diebeskarten - Spieler: {len(players)}, Rollen: {len(roles)}")
+
+            # 🎲 **Zufällige Rollenverteilung**
             import random
             random.shuffle(roles)
-            thief_cards = roles[:2]
-            remaining_roles = roles[2:]
 
-            # Diebeskarten speichern
-            conn.executemany(
-                "INSERT INTO thief_cards (role_name) VALUES (?)",
-                [(card['role_name'],) for card in thief_cards]
-            )
+            # 🟢 **Prüfen, ob Dieb im Spiel ist**
+            dieb_count = roles.count("Dieb")
 
-            # Rollen zufällig Spielern zuweisen
+            if dieb_count > 0:
+                # **2 Karten pro Dieb entfernen**
+                thief_cards = random.sample(roles, k=2 * dieb_count)
+
+                print(f"🃏 Ausgewählte Diebeskarten: {thief_cards}")
+
+                # **Hier liegt das Problem: Diebeskarten richtig entfernen**
+                remaining_roles = roles.copy()
+                for card in thief_cards:
+                    if card in remaining_roles:
+                        remaining_roles.remove(card)
+                    else:
+                        print(f"⚠️ WARNUNG: {card} war nicht in `roles` enthalten!")
+
+                # **Diebeskarten in Datenbank speichern**
+                conn.executemany(
+                    "INSERT INTO thief_cards (role_name) VALUES (?)",
+                    [(role,) for role in thief_cards]
+                )
+            else:
+                # **Falls kein Dieb im Spiel ist, bleibt die Diebeskarten-Tabelle leer**
+                remaining_roles = roles
+
+            print(f"🎲 Nach Diebeskarten - Spieler: {len(players)}, Rollen: {len(remaining_roles)}")
+
+            # 🔥 **JETZT erst die Anzahl von Spielern und Rollen prüfen!**
+            if len(players) != len(remaining_roles):
+                print(f"❌ Fehler! Spieleranzahl = {len(players)}, Rollen = {len(remaining_roles)}")
+                return jsonify({"error": "Spieleranzahl und Rollenanzahl stimmen nicht überein!"}), 400
+
+            # 🟢 **Spieler & Rollen mischen**
             random.shuffle(players)
-            assignments = []
-            for player, role in zip(players, remaining_roles):
-                assignments.append((role['role_name'], player['id']))
+            assignments = list(zip(players, remaining_roles))
 
+            # 🟢 **Neue Rollen in `players` speichern**
             conn.executemany(
                 "UPDATE players SET role = ? WHERE id = ?",
-                assignments
+                [(role, player) for player, role in assignments]
             )
+
             conn.commit()
 
-        # JSON-Antwort mit Redirect-Ziel
         return jsonify({"message": "Rollen erfolgreich zugewiesen", "redirect": url_for('game')}), 200
     except Exception as e:
         print(f"Fehler bei der zufälligen Rollenverteilung: {e}")
         return jsonify({"error": "Fehler bei der zufälligen Rollenverteilung"}), 500
+
+
+
+
 
 
 
@@ -587,15 +635,22 @@ def game():
 def start_game():
     """Initialisiert das Spiel, setzt alle relevanten Spalten zurück."""
     with get_db_connection() as conn:
-        # Tabelle role_actions leeren
         conn.execute("DELETE FROM role_actions")
 
         # Spielerstatus und Verliebtheitsstatus zurücksetzen
         conn.execute("UPDATE players SET status = 'lebendig', in_love = FALSE")
 
+        # 🔥 Hexentränke zurücksetzen: Hexe bekommt `1`, alle anderen `NULL`
+        conn.execute("""
+            UPDATE players
+            SET witch_heal = CASE WHEN role = 'Hexe' THEN 1 ELSE NULL END,
+                witch_poison = CASE WHEN role = 'Hexe' THEN 1 ELSE NULL END
+        """)
+
         conn.commit()
 
-    return jsonify({"message": "Spiel gestartet und Aktionen zurückgesetzt"})
+    return jsonify({"message": "Spiel gestartet und Hexentränke zurückgesetzt"}), 200
+
 
 
 
@@ -621,7 +676,7 @@ def night1():
 @app.route('/next_role', methods=['GET'])
 def get_next_role():
     with get_db_connection() as conn:
-        # Abrufen der Rollen aus `game_roles` mit den zugehörigen Daten aus `base_roles`
+        # Rollen aus der Datenbank abrufen
         roles = conn.execute("""
             SELECT gr.role_name, br.first_night
             FROM game_roles gr
@@ -630,8 +685,27 @@ def get_next_role():
             ORDER BY br.first_night ASC
         """).fetchall()
 
-    # JSON-Ausgabe der Rollen mit `role_name` und `first_night`
-    return jsonify([{"role_name": role["role_name"], "first_night": role["first_night"]} for role in roles])
+    expanded_roles = []
+    werewolf_added = False  # Flag, um Werwölfe nur einmal hinzuzufügen
+
+    for role in roles:
+        if role["role_name"] == "Hexe":
+            # Hexe mit zwei getrennten Aktionen hinzufügen
+            expanded_roles.append({"role_name": "Hexe", "action": "heal"})
+            expanded_roles.append({"role_name": "Hexe", "action": "poison"})
+        elif role["role_name"] == "Werwolf":
+            # Werwölfe nur einmal hinzufügen
+            if not werewolf_added:
+                expanded_roles.append({"role_name": "Werwolf"})
+                werewolf_added = True
+        else:
+            # Andere Rollen wie gewohnt hinzufügen
+            expanded_roles.append({"role_name": role["role_name"]})
+
+    # JSON-Ausgabe der Rollenliste
+    return jsonify(expanded_roles)
+
+
 
 
 @app.route('/set_role_action', methods=['POST'])
@@ -765,6 +839,202 @@ def amor_action():
         print(f"Fehler bei der Amor-Aktion: {e}")
         return jsonify({"error": "Fehler bei der Amor-Aktion"}), 500
 
+@app.route('/werewolf_action', methods=['POST'])
+def werewolf_action():
+    """Werwölfe wählen gemeinsam ein Opfer und töten es."""
+    data = request.json
+    game_id = data.get('game_id')
+    target_id = data.get('target_id')  # ID des gewählten Opfers
+
+    if not game_id or not target_id:
+        return jsonify({"error": "Fehlende Daten"}), 400
+
+    try:
+        with get_db_connection() as conn:
+            # Prüfen, ob das Ziel noch lebt
+            player = conn.execute("""
+                SELECT id FROM players
+                WHERE id = ? AND status = 'lebendig'
+            """, (target_id,)).fetchone()
+
+            if not player:
+                return jsonify({"error": "Das ausgewählte Ziel ist nicht mehr lebendig."}), 400
+
+            # Spielerstatus auf tot setzen
+            conn.execute("""
+                UPDATE players
+                SET status = 'tot'
+                WHERE id = ?
+            """, (target_id,))
+            conn.commit()
+
+        # Dokumentiere die Aktion in der Tabelle role_actions
+        save_role_action(
+            game_id=game_id,
+            role_name="Werwolf",
+            player_id=None,  # Keine spezifische Spieler-ID, da es eine Gruppenaktion ist
+            target_id=target_id,
+            action_name="Werwolfopfer",
+            result="Spieler getötet"
+        )
+
+        return jsonify({"message": "Spieler wurde von den Werwölfen getötet."}), 200
+    except Exception as e:
+        print(f"Fehler bei der Werwolf-Aktion: {e}")
+        return jsonify({"error": "Fehler bei der Werwolf-Aktion"}), 500
+
+
+
+
+@app.route('/living_players', methods=['GET'])
+def get_living_players():
+    """Gibt alle lebenden Spieler aus der players-Tabelle zurück."""
+    try:
+        with get_db_connection() as conn:
+            players = conn.execute("""
+                SELECT id, name, image
+                FROM players
+                WHERE status = 'lebendig'
+            """).fetchall()
+
+        # Rückgabe der lebenden Spieler
+        return jsonify([
+            {"id": player["id"], "name": player["name"], "image": player["image"]}
+            for player in players
+        ]), 200
+    except Exception as e:
+        print(f"Fehler beim Abrufen der lebenden Spieler: {e}")
+        return jsonify({"error": "Fehler beim Abrufen der lebenden Spieler"}), 500
+
+@app.route('/get_killed_players', methods=['GET'])
+def get_killed_players():
+    """Gibt alle getöteten Spieler der aktuellen Nacht zurück."""
+    with get_db_connection() as conn:
+        killed_players = conn.execute("""
+            SELECT p.id, p.name, p.image
+            FROM players p
+            JOIN role_actions ra ON p.id = ra.target_id
+            WHERE ra.phase_type = 'Nacht' AND ra.phase_number = ? AND p.status = 'tot'
+        """, (phase_number,)).fetchall()
+
+    return jsonify([{"id": player["id"], "name": player["name"], "image": player["image"]} for player in killed_players])
+
+@app.route('/heal_action', methods=['POST'])
+def heal_action():
+    """Hexe verwendet den Heiltrank, um einen Spieler zu heilen."""
+    data = request.json
+    game_id = data.get('game_id')
+    witch_id = data.get('witch_id')
+    target_id = data.get('target_id')
+
+    print(f"🔍 Anfrage erhalten: game_id={game_id}, witch_id={witch_id}, target_id={target_id}")
+
+    if not all([game_id, target_id, witch_id]):
+        return jsonify({"error": "Fehlende Daten"}), 400
+
+    try:
+        with get_db_connection() as conn:  
+            conn.row_factory = sqlite3.Row  
+
+            # 🔥 `phase_number` aus einer bestehenden Aktion holen (erste Nacht = 1)
+            phase_data = conn.execute("SELECT phase_number FROM role_actions WHERE game_id = ? ORDER BY id DESC LIMIT 1", (game_id,)).fetchone()
+            phase_number = phase_data["phase_number"] if phase_data else 1  # Falls keine Phase existiert, starte mit 1
+
+            print(f"📌 Bestimmte Phase für Heiltrank: {phase_number}")
+
+            # Prüfen, ob die Hexe den Heiltrank noch hat
+            witch = conn.execute("SELECT witch_heal FROM players WHERE id = ?", (witch_id,)).fetchone()
+
+            print(f"🧙‍♀️ Hexendaten aus DB: {witch}")
+
+            if not witch:
+                return jsonify({"error": "Hexendaten nicht gefunden"}), 400
+
+            witch_heal = witch["witch_heal"]
+
+            if witch_heal != 1:
+                print(f"❌ Fehler: Heiltrank nicht verfügbar. Aktueller Wert: {witch_heal}")
+                return jsonify({"error": "Heiltrank nicht verfügbar oder bereits verwendet"}), 400
+
+            # Spielerstatus auf lebendig setzen
+            conn.execute("UPDATE players SET status = 'lebendig' WHERE id = ?", (target_id,))
+
+            # Heiltrank der Hexe aufgebraucht markieren
+            conn.execute("UPDATE players SET witch_heal = 0 WHERE id = ?", (witch_id,))
+
+            # Aktion in der Tabelle role_actions dokumentieren
+            conn.execute("""
+                INSERT INTO role_actions (game_id, role_name, player_id, target_id, action_name, result, phase_number, phase_type)
+                VALUES (?, 'Hexe', ?, ?, 'Heiltrank verwendet', ?, ?, 'Nacht')
+            """, (game_id, witch_id, target_id, f"Spieler {target_id} wurde geheilt", phase_number))
+
+            conn.commit()
+
+        return jsonify({"message": "Spieler wurde erfolgreich geheilt"}), 200
+    except Exception as e:
+        print(f"❌ Fehler bei der Heiltrank-Aktion: {e}")
+        return jsonify({"error": "Fehler bei der Heiltrank-Aktion"}), 500
+
+
+@app.route('/poison_action', methods=['POST'])
+def poison_action():
+    """Hexe verwendet den Gifttrank, um einen Spieler zu töten."""
+    data = request.json
+    game_id = data.get('game_id')
+    witch_id = data.get('witch_id')
+    target_id = data.get('target_id')
+
+    print(f"🔍 Anfrage erhalten: game_id={game_id}, witch_id={witch_id}, target_id={target_id}")
+
+    if not all([game_id, target_id, witch_id]):
+        return jsonify({"error": "Fehlende Daten"}), 400
+
+    try:
+        with get_db_connection() as conn:  
+            conn.row_factory = sqlite3.Row  
+
+            # 🔥 `phase_number` aus einer bestehenden Aktion holen (erste Nacht = 1)
+            phase_data = conn.execute("SELECT phase_number FROM role_actions WHERE game_id = ? ORDER BY id DESC LIMIT 1", (game_id,)).fetchone()
+            phase_number = phase_data["phase_number"] if phase_data else 1  # Falls keine Phase existiert, starte mit 1
+
+            print(f"📌 Bestimmte Phase für Gifttrank: {phase_number}")
+
+            # Prüfen, ob die Hexe den Gifttrank noch hat
+            witch = conn.execute("SELECT witch_poison FROM players WHERE id = ?", (witch_id,)).fetchone()
+
+            print(f"🧙‍♀️ Hexendaten aus DB: {witch}")
+
+            if not witch:
+                return jsonify({"error": "Hexendaten nicht gefunden"}), 400
+
+            witch_poison = witch["witch_poison"]
+
+            if witch_poison != 1:
+                print(f"❌ Fehler: Gifttrank nicht verfügbar. Aktueller Wert: {witch_poison}")
+                return jsonify({"error": "Gifttrank nicht verfügbar oder bereits verwendet"}), 400
+
+            # Spielerstatus auf tot setzen
+            conn.execute("UPDATE players SET status = 'tot' WHERE id = ?", (target_id,))
+
+            # Gifttrank der Hexe aufgebraucht markieren
+            conn.execute("UPDATE players SET witch_poison = 0 WHERE id = ?", (witch_id,))
+
+            # Aktion in der Tabelle role_actions dokumentieren
+            conn.execute("""
+                INSERT INTO role_actions (game_id, role_name, player_id, target_id, action_name, result, phase_number, phase_type)
+                VALUES (?, 'Hexe', ?, ?, 'Gifttrank verwendet', ?, ?, 'Nacht')
+            """, (game_id, witch_id, target_id, f"Spieler {target_id} wurde vergiftet", phase_number))
+
+            conn.commit()
+
+        return jsonify({"message": "Spieler wurde erfolgreich vergiftet"}), 200
+    except Exception as e:
+        print(f"❌ Fehler bei der Gifttrank-Aktion: {e}")
+        return jsonify({"error": "Fehler bei der Gifttrank-Aktion"}), 500
+
+
+
+
 
 
 # Aktualisierte Route zur Demonstration des Phasenwechsels und Abschluss der Nacht
@@ -788,6 +1058,9 @@ def switch_phase():
             "message": f"Es gibt noch {actions_remaining} offene Aktionen.",
             "button": None
         }), 200
+
+
+
 
 
 if __name__ == '__main__':
