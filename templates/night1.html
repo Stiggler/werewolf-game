@@ -444,6 +444,29 @@ async function selectVictim(playerId) {
     }
 }
 
+function useHealTrank(playerId) {
+    fetch('/heal_action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            game_id: 1,  // Beispiel-ID des Spiels
+            witch_id: CURRENT_PLAYER_ID,  // ID der Hexe
+            target_id: playerId
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.message) {
+            alert(data.message);
+            updatePlayerTable();  // Tabelle aktualisieren
+            completeAction();  // Zur nächsten Aktion wechseln
+        } else {
+            alert(data.error);
+        }
+    })
+    .catch(error => console.error('Fehler bei der Heiltrank-Aktion:', error));
+}
+
 function loadWitchHealPhase() {
     fetch('/get_killed_players')
         .then(response => response.json())
@@ -515,28 +538,7 @@ function loadWitchPoisonPhase(players) {
 }
 
 
-function useHealTrank(playerId) {
-    fetch('/heal_action', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            game_id: 1,  // Beispiel-ID des Spiels
-            witch_id: CURRENT_PLAYER_ID,  // ID der Hexe
-            target_id: playerId
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.message) {
-            alert(data.message);
-            updatePlayerTable();  // Tabelle aktualisieren
-            completeAction();  // Zur nächsten Aktion wechseln
-        } else {
-            alert(data.error);
-        }
-    })
-    .catch(error => console.error('Fehler bei der Heiltrank-Aktion:', error));
-}
+
 
 function usePoisonTrank(playerId) {
     fetch('/poison_action', {

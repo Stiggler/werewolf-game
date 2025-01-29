@@ -504,42 +504,79 @@ def gameoverview():
 def random_assign_roles():
     try:
         with get_db_connection() as conn:
-            # Spieler und Rollen abrufen
-            players = conn.execute("SELECT id FROM players").fetchall()
-            roles = conn.execute("SELECT role_name, instance_id FROM game_roles").fetchall()
+            # 🔥 **Alle bisherigen Rollen in `players` zurücksetzen**
+            conn.execute("UPDATE players SET role = NULL")
 
-            # Tabelle thief_cards leeren
+            # 🔥 **Tabelle `thief_cards` komplett leeren**
             conn.execute("DELETE FROM thief_cards")
 
-            # Diebeskarten extrahieren
+            # 🟢 **Spieler abrufen**
+            players = conn.execute("SELECT id FROM players").fetchall()
+            players = [player["id"] for player in players]  # In Liste umwandeln
+
+            # 🟢 **Rollen abrufen**
+            roles = conn.execute("SELECT role_name FROM game_roles").fetchall()
+            roles = [role["role_name"] for role in roles]  # In Liste umwandeln
+
+            print(f"🎲 Vor Diebeskarten - Spieler: {len(players)}, Rollen: {len(roles)}")
+
+            # 🎲 **Zufällige Rollenverteilung**
             import random
             random.shuffle(roles)
-            thief_cards = roles[:2]
-            remaining_roles = roles[2:]
 
-            # Diebeskarten speichern
-            conn.executemany(
-                "INSERT INTO thief_cards (role_name) VALUES (?)",
-                [(card['role_name'],) for card in thief_cards]
-            )
+            # 🟢 **Prüfen, ob Dieb im Spiel ist**
+            dieb_count = roles.count("Dieb")
 
-            # Rollen zufällig Spielern zuweisen
+            if dieb_count > 0:
+                # **2 Karten pro Dieb entfernen**
+                thief_cards = random.sample(roles, k=2 * dieb_count)
+
+                print(f"🃏 Ausgewählte Diebeskarten: {thief_cards}")
+
+                # **Hier liegt das Problem: Diebeskarten richtig entfernen**
+                remaining_roles = roles.copy()
+                for card in thief_cards:
+                    if card in remaining_roles:
+                        remaining_roles.remove(card)
+                    else:
+                        print(f"⚠️ WARNUNG: {card} war nicht in `roles` enthalten!")
+
+                # **Diebeskarten in Datenbank speichern**
+                conn.executemany(
+                    "INSERT INTO thief_cards (role_name) VALUES (?)",
+                    [(role,) for role in thief_cards]
+                )
+            else:
+                # **Falls kein Dieb im Spiel ist, bleibt die Diebeskarten-Tabelle leer**
+                remaining_roles = roles
+
+            print(f"🎲 Nach Diebeskarten - Spieler: {len(players)}, Rollen: {len(remaining_roles)}")
+
+            # 🔥 **JETZT erst die Anzahl von Spielern und Rollen prüfen!**
+            if len(players) != len(remaining_roles):
+                print(f"❌ Fehler! Spieleranzahl = {len(players)}, Rollen = {len(remaining_roles)}")
+                return jsonify({"error": "Spieleranzahl und Rollenanzahl stimmen nicht überein!"}), 400
+
+            # 🟢 **Spieler & Rollen mischen**
             random.shuffle(players)
-            assignments = []
-            for player, role in zip(players, remaining_roles):
-                assignments.append((role['role_name'], player['id']))
+            assignments = list(zip(players, remaining_roles))
 
+            # 🟢 **Neue Rollen in `players` speichern**
             conn.executemany(
                 "UPDATE players SET role = ? WHERE id = ?",
-                assignments
+                [(role, player) for player, role in assignments]
             )
+
             conn.commit()
 
-        # JSON-Antwort mit Redirect-Ziel
         return jsonify({"message": "Rollen erfolgreich zugewiesen", "redirect": url_for('game')}), 200
     except Exception as e:
         print(f"Fehler bei der zufälligen Rollenverteilung: {e}")
         return jsonify({"error": "Fehler bei der zufälligen Rollenverteilung"}), 500
+
+
+
+
 
 
 
@@ -895,28 +932,34 @@ def heal_action():
     witch_id = data.get('witch_id')
     target_id = data.get('target_id')  # Spieler, der geheilt werden soll
 
-    if not all([game_id, witch_id, target_id]):
+    if not all([game_id, target_id]):
         return jsonify({"error": "Fehlende Daten"}), 400
 
     try:
         with get_db_connection() as conn:
-            # Prüfen, ob die Hexe den Heiltrank noch hat
-            witch = conn.execute("""
-                SELECT witch_heal FROM players WHERE id = ? AND role = 'Hexe'
-            """, (witch_id,)).fetchone()
-
-            if not witch:
-                # Hexe nicht gefunden, aus der Datenbank abrufen
+            # Falls witch_id nicht übergeben wurde, aus der Datenbank abrufen
+            if not witch_id:
                 witch_data = conn.execute("""
                     SELECT id FROM players WHERE role = 'Hexe' LIMIT 1
                 """).fetchone()
-
                 if witch_data:
                     witch_id = witch_data["id"]
                 else:
+                    print("Hexe nicht gefunden.")
                     return jsonify({"error": "Hexe nicht gefunden"}), 400
 
+            # Prüfen, ob die Hexe den Heiltrank noch hat
+            witch = conn.execute("""
+                SELECT witch_heal FROM players WHERE id = ?
+            """, (witch_id,)).fetchone()
+
+            print(f"Hexendaten: {witch}")  # Debugging-Ausgabe
+
+            if not witch:
+                return jsonify({"error": "Hexendaten nicht gefunden"}), 400
+
             if witch["witch_heal"] != 1:
+                print(f"Fehler: Heiltrank nicht verfügbar. Aktueller Wert: {witch['witch_heal']}")
                 return jsonify({"error": "Heiltrank nicht verfügbar oder bereits verwendet"}), 400
 
             # Spielerstatus auf lebendig setzen
@@ -945,6 +988,9 @@ def heal_action():
     except Exception as e:
         print(f"Fehler bei der Heiltrank-Aktion: {e}")
         return jsonify({"error": "Fehler bei der Heiltrank-Aktion"}), 500
+
+
+
 
 
 # Aktualisierte Route zur Demonstration des Phasenwechsels und Abschluss der Nacht
