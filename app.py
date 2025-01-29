@@ -976,6 +976,61 @@ def heal_action():
         return jsonify({"error": "Fehler bei der Heiltrank-Aktion"}), 500
 
 
+@app.route('/poison_action', methods=['POST'])
+def poison_action():
+    """Hexe verwendet den Gifttrank, um einen Spieler zu töten."""
+    data = request.json
+    game_id = data.get('game_id')
+    witch_id = data.get('witch_id')
+    target_id = data.get('target_id')
+
+    print(f"🔍 Anfrage erhalten: game_id={game_id}, witch_id={witch_id}, target_id={target_id}")
+
+    if not all([game_id, target_id, witch_id]):
+        return jsonify({"error": "Fehlende Daten"}), 400
+
+    try:
+        with get_db_connection() as conn:  
+            conn.row_factory = sqlite3.Row  
+
+            # 🔥 `phase_number` aus einer bestehenden Aktion holen (erste Nacht = 1)
+            phase_data = conn.execute("SELECT phase_number FROM role_actions WHERE game_id = ? ORDER BY id DESC LIMIT 1", (game_id,)).fetchone()
+            phase_number = phase_data["phase_number"] if phase_data else 1  # Falls keine Phase existiert, starte mit 1
+
+            print(f"📌 Bestimmte Phase für Gifttrank: {phase_number}")
+
+            # Prüfen, ob die Hexe den Gifttrank noch hat
+            witch = conn.execute("SELECT witch_poison FROM players WHERE id = ?", (witch_id,)).fetchone()
+
+            print(f"🧙‍♀️ Hexendaten aus DB: {witch}")
+
+            if not witch:
+                return jsonify({"error": "Hexendaten nicht gefunden"}), 400
+
+            witch_poison = witch["witch_poison"]
+
+            if witch_poison != 1:
+                print(f"❌ Fehler: Gifttrank nicht verfügbar. Aktueller Wert: {witch_poison}")
+                return jsonify({"error": "Gifttrank nicht verfügbar oder bereits verwendet"}), 400
+
+            # Spielerstatus auf tot setzen
+            conn.execute("UPDATE players SET status = 'tot' WHERE id = ?", (target_id,))
+
+            # Gifttrank der Hexe aufgebraucht markieren
+            conn.execute("UPDATE players SET witch_poison = 0 WHERE id = ?", (witch_id,))
+
+            # Aktion in der Tabelle role_actions dokumentieren
+            conn.execute("""
+                INSERT INTO role_actions (game_id, role_name, player_id, target_id, action_name, result, phase_number, phase_type)
+                VALUES (?, 'Hexe', ?, ?, 'Gifttrank verwendet', ?, ?, 'Nacht')
+            """, (game_id, witch_id, target_id, f"Spieler {target_id} wurde vergiftet", phase_number))
+
+            conn.commit()
+
+        return jsonify({"message": "Spieler wurde erfolgreich vergiftet"}), 200
+    except Exception as e:
+        print(f"❌ Fehler bei der Gifttrank-Aktion: {e}")
+        return jsonify({"error": "Fehler bei der Gifttrank-Aktion"}), 500
 
 
 
