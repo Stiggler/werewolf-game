@@ -73,7 +73,7 @@
                 <tr>
                     <th>Spieler</th>
                     <th>Aktuelle Rolle</th>
-                    <th>Ursprüngliche Rolle</th>
+                    <th>Info</th>  <!-- 🔥 Spaltenname geändert -->
                     <th>Status</th>
                     <th>Aktionen</th>
                 </tr>
@@ -98,12 +98,21 @@
                         </div>
                     </td>
                     <td>
-                        {% if player.original_role_image %}
-                        <img src="{{ player.original_role_image }}" alt="{{ player.original_role }}" width="50">
-                        {% else %}
-                        Keine Rolle
-                        {% endif %}
-                    </td>
+                        <div style="display: flex; align-items: center; gap: 5px;">
+                            <!-- Ursprüngliche Rolle für Dieb anzeigen -->
+                            {% if player.original_role_image %}
+                                <img src="{{ player.original_role_image }}" alt="{{ player.original_role }}" width="30">
+                            {% endif %}
+                            
+                            <!-- Hexen-Tränke anzeigen -->
+                            {% if player.witch_heal and player.witch_heal|int == 1 %}
+                                <img src="/static/icons/heal.png" alt="Heiltrank verfügbar" width="30">
+                            {% endif %}
+                            {% if player.witch_poison and player.witch_poison|int == 1 %}
+                                <img src="/static/icons/poison.png" alt="Gifttrank verfügbar" width="30">
+                            {% endif %}
+                        </div>
+                    </td>                                                          
                     <td>{{ player.status }}</td>
                     <td>
                         <button onclick="killPlayer('{{ player.id }}')"
@@ -346,47 +355,49 @@ document.addEventListener("DOMContentLoaded", () => {
     fetch('/players')
         .then(response => response.json())
         .then(data => {
-            console.log("Spieler-Daten mit 'in_love':", data); // Debugging-Ausgabe
+            console.log("🔍 Spieler-Daten nach Update:", data);
             const tbody = document.querySelector('#playersTable tbody');
-            tbody.innerHTML = ''; // Entferne alte Einträge
+            tbody.innerHTML = ''; // Alte Einträge entfernen
 
             data.forEach(player => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td>
-                        <div style="position: relative;">
+                        <div style="display: flex; align-items: center;">
                             <img src="${player.image}" alt="${player.name}" width="50">
                             <span>${player.name}</span>
-                            ${player.in_love 
-                                ? '<img src="/static/icons/inlove.png" alt="In Love" style="position: absolute; top: 0; right: 0; width: 20px;">' 
+                        </div>
+                    </td>
+                    <td>
+                        <div style="display: flex; align-items: center;">
+                            <img src="/static/rollen/${player.current_role ? player.current_role.toLowerCase().replace(' ', '_') : 'default'}.png" width="50">
+                            <span>${player.current_role || 'Unbekannt'}</span>
+                        </div>
+                    </td>
+                    <td>
+                        <div style="display: flex; align-items: center; gap: 5px;">
+                            <!-- Ursprüngliche Rolle nur für Dieb anzeigen -->
+                            ${player.original_role && player.original_role !== 'Hexe' 
+                                ? `<img src="/static/rollen/${player.original_role.toLowerCase().replace(' ', '_')}.png" width="30">` 
+                                : ''}
+
+                            <!-- Hexentränke anzeigen -->
+                            ${player.witch_heal && player.witch_heal === 1 
+                                ? `<img src="/static/icons/heal.png" alt="Heiltrank verfügbar" width="30">` 
+                                : ''}
+                            ${player.witch_poison && player.witch_poison === 1 
+                                ? `<img src="/static/icons/poison.png" alt="Gifttrank verfügbar" width="30">` 
                                 : ''}
                         </div>
                     </td>
-                    <td>
-                        <div>
-                            <img src="/static/rollen/${player.current_role ? player.current_role.toLowerCase().replace(' ', '_') : 'default'}.png" 
-                                 alt="${player.current_role || 'Keine Rolle'}" width="50">
-                            <span>${player.current_role || 'Keine Rolle'}</span>
-                        </div>
-                    </td>
-                    <td>
-                        ${player.original_role_image 
-                            ? `<img src="${player.original_role_image}" alt="${player.original_role}" width="50">` 
-                            : 'Keine Rolle'}
-                    </td>
-                    <td>${player.status || 'Unbekannt'}</td>
-                    <td>
-                        <button onclick="killPlayer(${player.id})" 
-                                style="background-color: red; color: white; border: none; padding: 5px 10px; border-radius: 5px;">
-                            Töten
-                        </button>
-                    </td>
+                    <td>${player.status}</td>
                 `;
                 tbody.appendChild(tr);
             });
         })
-        .catch(error => console.error('Fehler beim Aktualisieren der Tabelle:', error));
+        .catch(error => console.error('❌ Fehler beim Aktualisieren der Tabelle:', error));
 }
+
 
 async function fetchLivingPlayers() {
     const response = await fetch('/living_players');

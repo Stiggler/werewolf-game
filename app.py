@@ -186,6 +186,8 @@ def get_players_with_roles():
                 p.role AS current_role, 
                 p.status, 
                 p.in_love,  -- Spalte 'in_love' hinzufügen
+                p.witch_heal,  -- 🔥 Hexen-Heiltrank hinzufügen
+                p.witch_poison, -- 🔥 Hexen-Gifttrank hinzufügen
                 (SELECT role_name FROM role_actions WHERE player_id = p.id ORDER BY timestamp ASC LIMIT 1) AS original_role
             FROM players p
         """).fetchall()
@@ -197,7 +199,9 @@ def get_players_with_roles():
             "image": player["image"],
             "current_role": player["current_role"],
             "status": player["status"],
-            "in_love": player["in_love"],  # Attribut 'in_love' hinzufügen
+            "in_love": player["in_love"],
+            "witch_heal": player["witch_heal"],  # 🔥 Tränke zur API hinzufügen
+            "witch_poison": player["witch_poison"],
             "original_role": player["original_role"],
             "original_role_image": f"/static/rollen/{player['original_role'].lower().replace(' ', '_')}.png" if player["original_role"] else None
         }
