@@ -130,9 +130,10 @@ def ensure_columns_exist():
 
 # Verbindung zur Datenbank abrufen
 def get_db_connection():
-    conn = sqlite3.connect("players.db")
-    conn.row_factory = sqlite3.Row  # Ermöglicht den Zugriff auf Spaltennamen
+    conn = sqlite3.connect('players.db', timeout=10)  # 🔥 Timeout von 10 Sekunden setzen
+    conn.row_factory = sqlite3.Row
     return conn
+
 
 
 def clear_role_actions():
@@ -634,28 +635,22 @@ def game():
 def start_game():
     """Initialisiert das Spiel, setzt alle relevanten Spalten zurück."""
     with get_db_connection() as conn:
-        # Tabelle role_actions leeren
         conn.execute("DELETE FROM role_actions")
 
         # Spielerstatus und Verliebtheitsstatus zurücksetzen
         conn.execute("UPDATE players SET status = 'lebendig', in_love = FALSE")
 
-        # Hexentränke zurücksetzen
+        # 🔥 Hexentränke zurücksetzen: Hexe bekommt `1`, alle anderen `NULL`
         conn.execute("""
             UPDATE players
-            SET witch_heal = 1, witch_poison = 1
-            WHERE role = 'Hexe'
-        """)
-
-        conn.execute("""
-            UPDATE players
-            SET witch_heal = NULL, witch_poison = NULL
-            WHERE role != 'Hexe'
+            SET witch_heal = CASE WHEN role = 'Hexe' THEN 1 ELSE NULL END,
+                witch_poison = CASE WHEN role = 'Hexe' THEN 1 ELSE NULL END
         """)
 
         conn.commit()
 
-    return jsonify({"message": "Spiel gestartet und Aktionen zurückgesetzt"}), 200
+    return jsonify({"message": "Spiel gestartet und Hexentränke zurückgesetzt"}), 200
+
 
 
 
@@ -930,64 +925,58 @@ def heal_action():
     data = request.json
     game_id = data.get('game_id')
     witch_id = data.get('witch_id')
-    target_id = data.get('target_id')  # Spieler, der geheilt werden soll
+    target_id = data.get('target_id')
 
-    if not all([game_id, target_id]):
+    print(f"🔍 Anfrage erhalten: game_id={game_id}, witch_id={witch_id}, target_id={target_id}")
+
+    if not all([game_id, target_id, witch_id]):
         return jsonify({"error": "Fehlende Daten"}), 400
 
     try:
-        with get_db_connection() as conn:
-            # Falls witch_id nicht übergeben wurde, aus der Datenbank abrufen
-            if not witch_id:
-                witch_data = conn.execute("""
-                    SELECT id FROM players WHERE role = 'Hexe' LIMIT 1
-                """).fetchone()
-                if witch_data:
-                    witch_id = witch_data["id"]
-                else:
-                    print("Hexe nicht gefunden.")
-                    return jsonify({"error": "Hexe nicht gefunden"}), 400
+        with get_db_connection() as conn:  
+            conn.row_factory = sqlite3.Row  
+
+            # 🔥 `phase_number` aus einer bestehenden Aktion holen (erste Nacht = 1)
+            phase_data = conn.execute("SELECT phase_number FROM role_actions WHERE game_id = ? ORDER BY id DESC LIMIT 1", (game_id,)).fetchone()
+            phase_number = phase_data["phase_number"] if phase_data else 1  # Falls keine Phase existiert, starte mit 1
+
+            print(f"📌 Bestimmte Phase für Heiltrank: {phase_number}")
 
             # Prüfen, ob die Hexe den Heiltrank noch hat
-            witch = conn.execute("""
-                SELECT witch_heal FROM players WHERE id = ?
-            """, (witch_id,)).fetchone()
+            witch = conn.execute("SELECT witch_heal FROM players WHERE id = ?", (witch_id,)).fetchone()
 
-            print(f"Hexendaten: {witch}")  # Debugging-Ausgabe
+            print(f"🧙‍♀️ Hexendaten aus DB: {witch}")
 
             if not witch:
                 return jsonify({"error": "Hexendaten nicht gefunden"}), 400
 
-            if witch["witch_heal"] != 1:
-                print(f"Fehler: Heiltrank nicht verfügbar. Aktueller Wert: {witch['witch_heal']}")
+            witch_heal = witch["witch_heal"]
+
+            if witch_heal != 1:
+                print(f"❌ Fehler: Heiltrank nicht verfügbar. Aktueller Wert: {witch_heal}")
                 return jsonify({"error": "Heiltrank nicht verfügbar oder bereits verwendet"}), 400
 
             # Spielerstatus auf lebendig setzen
-            conn.execute("""
-                UPDATE players SET status = 'lebendig' WHERE id = ?
-            """, (target_id,))
+            conn.execute("UPDATE players SET status = 'lebendig' WHERE id = ?", (target_id,))
 
             # Heiltrank der Hexe aufgebraucht markieren
-            conn.execute("""
-                UPDATE players SET witch_heal = 0 WHERE id = ?
-            """, (witch_id,))
+            conn.execute("UPDATE players SET witch_heal = 0 WHERE id = ?", (witch_id,))
 
             # Aktion in der Tabelle role_actions dokumentieren
-            save_role_action(
-                game_id=game_id,
-                role_name="Hexe",
-                player_id=witch_id,
-                target_id=target_id,
-                action_name="Heiltrank verwendet",
-                result=f"Spieler {target_id} wurde geheilt"
-            )
+            conn.execute("""
+                INSERT INTO role_actions (game_id, role_name, player_id, target_id, action_name, result, phase_number, phase_type)
+                VALUES (?, 'Hexe', ?, ?, 'Heiltrank verwendet', ?, ?, 'Nacht')
+            """, (game_id, witch_id, target_id, f"Spieler {target_id} wurde geheilt", phase_number))
 
             conn.commit()
 
         return jsonify({"message": "Spieler wurde erfolgreich geheilt"}), 200
     except Exception as e:
-        print(f"Fehler bei der Heiltrank-Aktion: {e}")
+        print(f"❌ Fehler bei der Heiltrank-Aktion: {e}")
         return jsonify({"error": "Fehler bei der Heiltrank-Aktion"}), 500
+
+
+
 
 
 

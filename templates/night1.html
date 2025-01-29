@@ -62,9 +62,10 @@
 </head>
 <body>
     <script>
-        // Spieler-ID des Diebs (dynamisch aus dem Backend übergeben)
-        const CURRENT_PLAYER_ID = "{{ thief_player_id | default('null') }}";
+        const CURRENT_PLAYER_ID = "{{ thief_player_id | default('null') }}"; // Für Dieb
+        let WITCH_PLAYER_ID = null;  // 🔥 Jetzt eigene ID für die Hexe
     </script>
+    
 
     <div class="left-panel">
         <table id="playersTable">
@@ -294,6 +295,29 @@
     roleContentDiv.appendChild(confirmButton);
 }
 
+function setWitchPlayerId(callback) {
+    fetch('/players')
+        .then(response => response.json())
+        .then(players => {
+            console.log("🔍 Spieler aus API:", players);
+
+            let witch = players.find(player => player.current_role === "Hexe");
+            if (witch) {
+                WITCH_PLAYER_ID = witch.id;
+                console.log("✅ Hexen-ID gefunden:", WITCH_PLAYER_ID);
+                if (callback) callback();
+            } else {
+                console.warn("❌ Keine Hexe gefunden!");
+            }
+        })
+        .catch(error => console.error("❌ Fehler beim Abrufen der Spieler:", error));
+}
+
+// 🔥 Diese Funktion direkt beim Laden der Seite ausführen
+document.addEventListener("DOMContentLoaded", () => {
+    console.log("🔄 Starte setWitchPlayerId...");
+    setWitchPlayerId();
+});
 
 
         function completeAction() {
@@ -445,12 +469,22 @@ async function selectVictim(playerId) {
 }
 
 function useHealTrank(playerId) {
+    console.log("🔍 Vor Trank-Nutzung - Hexen-ID:", WITCH_PLAYER_ID);
+
+    if (!WITCH_PLAYER_ID) {
+        console.error("❌ Hexen-ID ist nicht gesetzt! Lade sie erneut...");
+        setWitchPlayerId(() => useHealTrank(playerId)); // Falls die ID fehlt, nochmal laden
+        return;
+    }
+
+    console.log("🧙‍♀️ Hexen-ID:", WITCH_PLAYER_ID);
+
     fetch('/heal_action', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            game_id: 1,  // Beispiel-ID des Spiels
-            witch_id: CURRENT_PLAYER_ID,  // ID der Hexe
+            game_id: 1,  
+            witch_id: WITCH_PLAYER_ID,  // ID der Hexe
             target_id: playerId
         })
     })
@@ -458,14 +492,15 @@ function useHealTrank(playerId) {
     .then(data => {
         if (data.message) {
             alert(data.message);
-            updatePlayerTable();  // Tabelle aktualisieren
-            completeAction();  // Zur nächsten Aktion wechseln
+            updatePlayerTable();
+            completeAction();
         } else {
             alert(data.error);
         }
     })
     .catch(error => console.error('Fehler bei der Heiltrank-Aktion:', error));
 }
+
 
 function loadWitchHealPhase() {
     fetch('/get_killed_players')
@@ -484,28 +519,44 @@ function loadWitchHealPhase() {
                 playerCard.style.border = "1px solid #ccc";
                 playerCard.style.padding = "10px";
                 playerCard.style.margin = "10px 0";
+                playerCard.style.display = "flex";
+                playerCard.style.alignItems = "center";
+                playerCard.style.gap = "10px";
 
                 const img = document.createElement('img');
                 img.src = player.image;
                 img.alt = player.name;
                 img.style.width = "50px";
-                img.style.marginRight = "10px";
 
                 const name = document.createElement('span');
                 name.textContent = player.name;
 
-                const button = document.createElement('button');
-                button.textContent = 'Heilen';
-                button.onclick = () => useHealTrank(player.id);
+                const healButton = document.createElement('button');
+                healButton.textContent = 'Heilen';
+                healButton.style.backgroundColor = "green";
+                healButton.style.color = "white";
+                healButton.onclick = () => useHealTrank(player.id);
 
                 playerCard.appendChild(img);
                 playerCard.appendChild(name);
-                playerCard.appendChild(button);
+                playerCard.appendChild(healButton);
                 roleContentDiv.appendChild(playerCard);
             });
+
+            // 🔥 "Nicht heilen"-Button hinzufügen
+            const skipButton = document.createElement('button');
+            skipButton.textContent = 'Nicht heilen';
+            skipButton.style.marginTop = "20px";
+            skipButton.style.backgroundColor = "gray";
+            skipButton.style.color = "white";
+            skipButton.onclick = () => completeAction(); // 🔥 Springt zur nächsten Phase
+
+            roleContentDiv.appendChild(skipButton);
         })
         .catch(error => console.error('Fehler beim Laden der getöteten Spieler:', error));
 }
+
+
 
 function loadWitchPoisonPhase(players) {
     const roleContentDiv = document.getElementById('roleContent');
