@@ -1,0 +1,21 @@
+function startNewDay() {
+    fetch('/start_day', { method: 'POST' })
+        .then(response => response.json())
+        .then(data => console.log("☀️ Neuer Tag gestartet:", data.message))
+        .catch(error => console.error("Fehler beim Starten des Tages:", error));
+}
+
+// 🔥 Diese Funktion wird NUR aufgerufen, wenn der Tag beginnt!
+function checkDayTransition() {
+    fetch('/get_phase')
+        .then(response => response.json())
+        .then(data => {
+            if (data.phase === "Tag") {
+                startNewDay();
+            }
+        })
+        .catch(error => console.error("Fehler beim Laden der Phase:", error));
+}
+
+// Beim Laden der Tagesansicht ausführen
+document.addEventListener("DOMContentLoaded", checkDayTransition);

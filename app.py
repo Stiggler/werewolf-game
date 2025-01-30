@@ -43,19 +43,7 @@ def init_db():
                 role_name TEXT NOT NULL
             )
         """)
-        # Game state Tabelle
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS game_state (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                game_id INTEGER NOT NULL,
-                player_id INTEGER,
-                role_id INTEGER,
-                attribute_name TEXT NOT NULL,
-                value TEXT,
-                FOREIGN KEY (player_id) REFERENCES players (id),
-                FOREIGN KEY (role_id) REFERENCES game_roles (id)
-            )
-        """)
+
                 # Rollen aus JSON
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS base_roles (
@@ -84,6 +72,20 @@ def init_db():
                 FOREIGN KEY (target_id) REFERENCES players (id)
             )
         """)
+
+        # Game-State-Tabelle für Tag/Nacht-Wechsel
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS game_state (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                game_id INTEGER DEFAULT 1,
+                phase TEXT DEFAULT 'Nacht',
+                phase_number INTEGER DEFAULT 0
+            )
+        """)
+        cursor.execute("DELETE FROM game_state")
+        cursor.execute("INSERT INTO game_state (game_id, phase, phase_number) VALUES (1, 'Nacht', 0)")
+
+
         # Spalte `in_love` hinzufügen, falls sie fehlt
         try:
             cursor.execute("ALTER TABLE players ADD COLUMN in_love BOOLEAN DEFAULT FALSE")
@@ -110,7 +112,15 @@ def init_db():
             print("Spalte 'witch_poison' hinzugefügt.")
         except sqlite3.OperationalError:
             print("Spalte 'witch_poison' existiert bereits.")
+        try:
+            cursor.execute("ALTER TABLE players ADD COLUMN status_at_night TEXT DEFAULT 'lebendig'")
+        except sqlite3.OperationalError:
+            print("Spalte status_at_night existiert bereits.")
     print("Datenbank initialisiert.")
+
+
+
+        
 
 
 
@@ -465,11 +475,6 @@ def save_roles():
 
 
 
-
-
-
-
-
 # Rollenübersicht abrufen
 @app.route('/get_selected_roles', methods=['GET'])
 def get_selected_roles():
@@ -641,6 +646,10 @@ def start_game():
     with get_db_connection() as conn:
         conn.execute("DELETE FROM role_actions")
 
+        # Spielstart setzt die Phase zurück
+        conn.execute("DELETE FROM game_state")
+        conn.execute("INSERT INTO game_state (game_id, phase, phase_number) VALUES (1, 'Nacht', 0)")
+
         # Spielerstatus und Verliebtheitsstatus zurücksetzen
         conn.execute("UPDATE players SET status = 'lebendig', in_love = FALSE")
 
@@ -650,7 +659,7 @@ def start_game():
             SET witch_heal = CASE WHEN role = 'Hexe' THEN 1 ELSE NULL END,
                 witch_poison = CASE WHEN role = 'Hexe' THEN 1 ELSE NULL END
         """)
-
+ 
         conn.commit()
 
     return jsonify({"message": "Spiel gestartet und Hexentränke zurückgesetzt"}), 200
@@ -1040,43 +1049,105 @@ def poison_action():
 
 
 
-
-# Aktualisierte Route zur Demonstration des Phasenwechsels und Abschluss der Nacht
-@app.route('/next_phase', methods=['POST'])
-def switch_phase():
+def switch_to_day():
+    """Wechselt von Nacht zu Tag, wenn die Nacht endet."""
     with get_db_connection() as conn:
-        # Überprüfe, ob alle Rollenaktionen abgeschlossen sind
-        actions_remaining = conn.execute("""
-            SELECT COUNT(*) FROM role_actions
-            WHERE phase_number = ? AND phase_type = ?
-        """, (phase_number, current_phase)).fetchone()[0]
+        game_state = conn.execute("SELECT phase, phase_number FROM game_state WHERE game_id = 1").fetchone()
 
-    if actions_remaining == 0:
-        next_phase()  # Wechsel zur nächsten Phase
-        return jsonify({
-            "message": f"Phase gewechselt: {current_phase} {phase_number}",
-            "button": "Nacht ist fertig!"
-        }), 200
-    else:
-        return jsonify({
-            "message": f"Es gibt noch {actions_remaining} offene Aktionen.",
-            "button": None
-        }), 200
+        if game_state["phase"] == "Nacht":
+            new_phase = "Tag"
+            new_phase_number = game_state["phase_number"]  # Bleibt gleich
 
+            conn.execute("""
+                UPDATE game_state
+                SET phase = ?, phase_number = ?
+                WHERE game_id = 1
+            """, (new_phase, new_phase_number))
+
+            conn.commit()
+            print("🌞 Phase wurde auf 'Tag' umgestellt!")
+
+
+
+
+
+# Seherin-Aktion: Sieht die Rolle eines Spielers
 @app.route('/seer_action', methods=['GET'])
 def seer_action():
-    """Gibt die Liste aller lebenden Spieler für die Seherin zurück."""
+    """Gibt eine Liste aller Spieler zurück, die zu Beginn der Nacht lebendig waren."""
     with get_db_connection() as conn:
         players = conn.execute("""
-            SELECT id, name, image, role AS current_role 
-            FROM players 
-            WHERE status = 'lebendig'
+            SELECT id, name, role FROM players WHERE status_at_night = 'lebendig'
         """).fetchall()
+
+    if not players:
+        return jsonify({"error": "Keine Spieler gefunden"}), 404
+
+    return jsonify([{"id": player["id"], "name": player["name"]} for player in players])
+
+@app.route('/seer_action/<int:player_id>', methods=['GET'])
+def reveal_role(player_id):
+    """Gibt die Rolle eines bestimmten Spielers zurück."""
+    with get_db_connection() as conn:
+        player = conn.execute("SELECT name, role FROM players WHERE id = ?", (player_id,)).fetchone()
+
+    if player:
+        return jsonify({"name": player["name"], "role": player["role"]})
+    else:
+        return jsonify({"error": "Spieler nicht gefunden"}), 404
+
+
+@app.route('/start_night', methods=['POST'])
+def start_night():
+    """Speichert, wer zu Beginn der Nacht noch lebendig war."""
+    with get_db_connection() as conn:
+        conn.execute("UPDATE players SET status_at_night = status")
+        conn.commit()
+    return jsonify({"message": "Neue Nacht beginnt – Spielerstatus gespeichert."}), 200
+
+
+@app.route('/end_night', methods=['POST'])
+def end_night():
+    with get_db_connection() as conn:
+        conn.execute("""
+            UPDATE game_state
+            SET phase = 'Tag', phase_number = phase_number + 1
+            WHERE game_id = 1
+        """)
+        conn.commit()
+    return jsonify({"message": "Die Sonne geht auf, das Dorf erwacht!"}), 200
+
+@app.route('/start_day', methods=['POST'])
+def start_day():
+    """Speichert, wer zu Beginn des Tages noch lebendig war."""
+    with get_db_connection() as conn:
+        conn.execute("UPDATE players SET status_at_night = status")
+        conn.commit()
+    return jsonify({"message": "Neuer Tag beginnt – Spielerstatus gespeichert."}), 200
+
+
+@app.route('/role_actions_count', methods=['GET'])
+def role_actions_count():
+    """Zählt verbleibende Nachtaktionen."""
+    with get_db_connection() as conn:
+        actions_left = conn.execute("""
+            SELECT COUNT(*) AS remaining_actions
+            FROM role_actions
+            WHERE phase_type = 'Nacht' AND phase_number = (SELECT phase_number FROM game_state WHERE game_id = 1)
+        """).fetchone()
         
-        return jsonify([dict(player) for player in players])
+        return jsonify({"remaining_actions": actions_left["remaining_actions"]})
 
+@app.route('/get_phase', methods=['GET'])
+def get_phase():
+    """Gibt die aktuelle Phase (Nacht oder Tag) und die Phasennummer zurück."""
+    with get_db_connection() as conn:
+        game_state = conn.execute("SELECT phase, phase_number FROM game_state WHERE game_id = 1").fetchone()
 
-
+    if game_state:
+        return jsonify({"phase": game_state["phase"], "phase_number": game_state["phase_number"]})
+    else:
+        return jsonify({"error": "Kein Spielstatus gefunden"}), 404
 
 
 if __name__ == '__main__':

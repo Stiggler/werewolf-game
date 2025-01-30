@@ -66,8 +66,8 @@
         let WITCH_PLAYER_ID = null;  // 🔥 Jetzt eigene ID für die Hexe
     </script>
     
-
-    <div class="left-panel">
+    <h2 id="phaseDisplay" style="text-align: center; padding: 10px;">Lade Phase...</h2>
+     <div class="left-panel">
         <table id="playersTable">
             <thead>
                 <tr>
@@ -137,6 +137,11 @@
                 <button onclick="updatePlayerTable()">Tabelle aktualisieren</button>
             </div>
         </div>
+        <div id="endNightContainer" style="text-align: center; display: none;">
+            <button id="endNightButton" style="font-size: 20px; padding: 10px 20px; background-color: yellow; color: black; border: none; cursor: pointer;">
+                ☀️ Die Sonne geht auf, das Dorf erwacht! 🌅
+            </button>
+        </div>    
     </div>
 
     <script>
@@ -334,17 +339,26 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
 
-        function completeAction() {
-            currentRoleIndex++;
-            if (currentRoleIndex < roles.length) {
-                loadRole(roles[currentRoleIndex]); // Lade die nächste Rollenaktion
-            } else {
-                alert('Die Nacht ist vorbei!');
-                location.reload(); // Seite neu laden, wenn alle Aktionen abgeschlossen sind
-            }
+function completeAction() {
+    currentRoleIndex++;
+    if (currentRoleIndex < roles.length) {
+        loadRole(roles[currentRoleIndex]); // Lade die nächste Rollenaktion
+    } else {
+        alert('Die Nacht ist vorbei!');
 
-            updatePlayerTable(); // Tabelle aktualisieren
-        }
+        // 🔥 Automatisch Backend anweisen, die Phase zu wechseln
+        fetch('/end_night', { method: 'POST' })
+            .then(response => response.json())
+            .then(data => {
+                console.log(data.message);
+                location.reload(); // 🔄 Seite neu laden für den Tagesstart
+            })
+            .catch(error => console.error("❌ Fehler beim Wechsel zur Tagphase:", error));
+    }
+
+    updatePlayerTable(); // Tabelle aktualisieren
+}
+
 
         function previousAction() {
             if (currentRoleIndex > 0) {
@@ -661,58 +675,54 @@ function usePoisonTrank(playerId) {
 }
 
 function loadSeerPhase() {
-    fetch('/seer_action')
+    fetch('/seer_action') // 🔥 Holt die Spieler aus der API
         .then(response => response.json())
         .then(players => {
-            const roleContentDiv = document.getElementById('roleContent');
-            roleContentDiv.innerHTML = '<h3>Seherin: Wähle einen Spieler, um seine Rolle zu sehen</h3>';
+            if (players.error) {
+                alert(players.error);
+                return;
+            }
 
-            const playerContainer = document.createElement('div');
-            playerContainer.style.display = "flex";
-            playerContainer.style.flexWrap = "wrap";
-            playerContainer.style.gap = "10px";
+            const roleContentDiv = document.getElementById('roleContent');
+            roleContentDiv.innerHTML = '<h3>Seherin: Wähle einen Spieler</h3>';
 
             players.forEach(player => {
-                const playerCard = document.createElement('div');
-                playerCard.style.border = "1px solid #ccc";
-                playerCard.style.padding = "10px";
-                playerCard.style.cursor = "pointer";
-                playerCard.style.display = "flex";
-                playerCard.style.flexDirection = "column";
-                playerCard.style.alignItems = "center";
-                playerCard.onclick = () => revealRole(player);
-
-                const img = document.createElement('img');
-                img.src = player.image;
-                img.alt = player.name;
-                img.style.width = "100px";
-                img.style.height = "100px";
-
-                const name = document.createElement('span');
-                name.textContent = player.name;
-
-                playerCard.appendChild(img);
-                playerCard.appendChild(name);
-                playerContainer.appendChild(playerCard);
+                const button = document.createElement('button');
+                button.textContent = player.name;
+                button.style.display = "block"; // Sicherstellen, dass die Buttons untereinander erscheinen
+                button.onclick = () => revealRole(player.id);
+                roleContentDiv.appendChild(button);
             });
-
-            roleContentDiv.appendChild(playerContainer);
         })
-        .catch(error => console.error('Fehler beim Laden der Seherin-Aktion:', error));
+        .catch(error => console.error("Fehler beim Laden der Seherin-Aktion:", error));
 }
 
-function revealRole(player) {
-    const roleContentDiv = document.getElementById('roleContent');
-    roleContentDiv.innerHTML = `
-        <h2>${player.name} ist...</h2>
-        <div style="text-align: center;">
-            <img src="/static/rollen/${player.current_role.toLowerCase().replace(' ', '_')}.png" 
-                 alt="${player.current_role}" style="width: 200px;">
-            <h1>${player.current_role}</h1>
-        </div>
-        <button onclick="loadSeerPhase()" style="margin-top: 20px;">Zurück</button>
-    `;
+
+        let phaseSwitched = false; // 🔥 Variable, um doppeltes Neuladen zu verhindern
+
+function updatePhaseDisplay() {
+    fetch('/get_phase')
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('phaseDisplay').textContent = `Phase: ${data.phase} ${data.phase_number}`;
+
+            if (data.phase === "Tag" && !phaseSwitched) {
+                phaseSwitched = true; // ✅ Verhindert mehrfaches Neuladen
+                alert("🌞 Die Sonne geht auf, das Dorf erwacht!");
+                setTimeout(() => window.location.href = '/game', 1000); // 🔥 Geht zur nächsten Phase, statt endlos zu reloaden
+            }
+        })
+        .catch(error => console.error("Fehler beim Laden der Phase:", error));
 }
+
+// 🔥 Diese Funktion wird weiterhin alle 5 Sekunden aufgerufen
+document.addEventListener("DOMContentLoaded", () => {
+    updatePhaseDisplay();
+    setInterval(updatePhaseDisplay, 5000);
+});
+
+
+
 
 
         function killPlayer(playerId) {
@@ -736,6 +746,103 @@ function revealRole(player) {
             })
             .catch(error => console.error('Fehler beim Töten des Spielers:', error));
         }
+
+        function checkNightEnd() {
+    fetch('/get_phase')
+        .then(response => response.json())
+        .then(data => {
+            if (data.phase === "Nacht") {
+                fetch('/role_actions_count')
+                    .then(response => response.json())
+                    .then(countData => {
+                        if (countData.remaining_actions === 0) {
+                            document.getElementById('endNightContainer').style.display = "block";
+                        }
+                    });
+            }
+        })
+        .catch(error => console.error("Fehler beim Prüfen der Nachtaktionen:", error));
+}
+
+document.getElementById('endNightButton').addEventListener('click', () => {
+    fetch('/end_night', { method: 'POST' })
+        .then(response => response.json())
+        .then(data => {
+            alert(data.message);
+            location.reload();  // Spiel aktualisieren
+        })
+        .catch(error => console.error("Fehler beim Wechsel zur Tagphase:", error));
+});
+
+function revealRole(playerId) {
+    fetch(`/seer_action/${playerId}`)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error("Fehler beim Abrufen der Rolle");
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.error) {
+                alert(data.error);
+                return;
+            }
+
+            let overlay = document.getElementById("seerOverlay");
+            if (!overlay) {
+                overlay = document.createElement("div");
+                overlay.id = "seerOverlay";
+                overlay.style.position = "fixed";
+                overlay.style.top = "0";
+                overlay.style.left = "0";
+                overlay.style.width = "100vw";
+                overlay.style.height = "100vh";
+                overlay.style.backgroundColor = "rgba(0, 0, 0, 0.8)";
+                overlay.style.display = "flex";
+                overlay.style.justifyContent = "center";
+                overlay.style.alignItems = "center";
+                overlay.style.flexDirection = "column";
+                overlay.style.zIndex = "1000";
+                document.body.appendChild(overlay);
+            }
+
+            overlay.innerHTML = ""; // 🔥 Altes Pop-up leeren
+
+            // 🔥 Rollenname in großer Schrift
+            const roleText = document.createElement("h1");
+            roleText.style.color = "white";
+            roleText.style.fontSize = "3rem";  // Größere Schrift
+            roleText.style.fontWeight = "bold";
+            roleText.textContent = `Diese Rolle hat ${data.name}: ${data.role}`;
+
+            // 🔥 Rollenbild groß & quadratisch
+            const roleImage = document.createElement("img");
+            roleImage.src = `/static/rollen/${data.role.toLowerCase().replace(' ', '_')}.png`;
+            roleImage.alt = data.role;
+            roleImage.style.width = "300px";  // Größeres Bild
+            roleImage.style.height = "300px"; // Quadratische Form
+            roleImage.style.borderRadius = "10px";  // Leichte Abrundung für ein schöneres Design
+
+            // 🔥 Schließen-Button
+            const closeButton = document.createElement("button");
+            closeButton.textContent = "Schließen";
+            closeButton.style.marginTop = "20px";
+            closeButton.style.padding = "10px 20px";
+            closeButton.style.fontSize = "1.5rem";  // Größerer Button
+            closeButton.style.cursor = "pointer";
+            closeButton.onclick = () => document.body.removeChild(overlay);
+
+            overlay.appendChild(roleText);
+            overlay.appendChild(roleImage);
+            overlay.appendChild(closeButton);
+        })
+        .catch(error => console.error("❌ Fehler beim Abrufen der Rolle:", error));
+}
+
+
+
+
+
     </script>
 </body>
 </html>

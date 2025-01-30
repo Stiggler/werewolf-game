@@ -103,15 +103,14 @@
 
 
 <script>
-    function startGame() {
-        fetch('/start_game', { method: 'POST' })
-            .then(response => response.json())
-            .then(data => {
-                if (data.message) {
-                    console.log(data.message);
-                    window.location.href = '/night1'; // Weiterleitung zur ersten Nacht
-                }
-            })
-            .catch(error => console.error("Fehler beim Starten des Spiels:", error));
-    }
+function startGame() {
+    fetch('/start_game', { method: 'POST' })
+        .then(response => response.json())
+        .then(data => {
+            console.log(data.message);
+            window.location.href = '/night1'; // Weiterleitung zur ersten Nacht
+        })
+        .catch(error => console.error("Fehler beim Starten des Spiels:", error));
+}
+
 </script>
