@@ -658,7 +658,17 @@ def start_game():
             UPDATE players
             SET witch_heal = CASE WHEN role = 'Hexe' THEN 1 ELSE NULL END,
                 witch_poison = CASE WHEN role = 'Hexe' THEN 1 ELSE NULL END
-        """)
+                     
+                    """)
+                     
+        # Alle Spieler auf lebendig setzen
+        conn.execute("UPDATE players SET status = 'lebendig', status_at_night = 'lebendig'")
+        
+        # Spielphase auf Nacht 0 setzen
+        conn.execute("UPDATE game_state SET phase = 'Nacht', phase_number = 0 WHERE game_id = 1")
+                     
+
+
  
         conn.commit()
 
@@ -1048,24 +1058,27 @@ def poison_action():
 
 
 
-
-def switch_to_day():
-    """Wechselt von Nacht zu Tag, wenn die Nacht endet."""
+@app.route('/day')
+def day():
+    """Zeigt die Tagesphase mit der Abstimmung an."""
     with get_db_connection() as conn:
-        game_state = conn.execute("SELECT phase, phase_number FROM game_state WHERE game_id = 1").fetchone()
+        players = conn.execute("SELECT * FROM players").fetchall()
+    
+    return render_template("day.html", players=players)
 
-        if game_state["phase"] == "Nacht":
-            new_phase = "Tag"
-            new_phase_number = game_state["phase_number"]  # Bleibt gleich
 
-            conn.execute("""
-                UPDATE game_state
-                SET phase = ?, phase_number = ?
-                WHERE game_id = 1
-            """, (new_phase, new_phase_number))
 
-            conn.commit()
-            print("🌞 Phase wurde auf 'Tag' umgestellt!")
+
+
+@app.route('/switch_to_day', methods=['POST'])
+def switch_to_day():
+    """Wechselt die Phase auf 'Tag' und erhöht die Phasennummer."""
+    with get_db_connection() as conn:
+        conn.execute("UPDATE game_state SET phase = 'Tag', phase_number = phase_number + 1 WHERE game_id = 1")
+        conn.commit()
+    return jsonify({"message": "Es ist Tag!"}), 200
+
+
 
 
 
@@ -1099,11 +1112,13 @@ def reveal_role(player_id):
 
 @app.route('/start_night', methods=['POST'])
 def start_night():
-    """Speichert, wer zu Beginn der Nacht noch lebendig war."""
+    """Speichert den Status aller lebenden Spieler für die Seherin und beginnt die neue Nacht."""
     with get_db_connection() as conn:
         conn.execute("UPDATE players SET status_at_night = status")
+        conn.execute("UPDATE game_state SET phase = 'Nacht', phase_number = phase_number + 1 WHERE game_id = 1")
         conn.commit()
-    return jsonify({"message": "Neue Nacht beginnt – Spielerstatus gespeichert."}), 200
+    return jsonify({"message": "Neue Nacht gestartet"}), 200
+
 
 
 @app.route('/end_night', methods=['POST'])
@@ -1148,6 +1163,23 @@ def get_phase():
         return jsonify({"phase": game_state["phase"], "phase_number": game_state["phase_number"]})
     else:
         return jsonify({"error": "Kein Spielstatus gefunden"}), 404
+
+@app.route('/vote', methods=['POST'])
+def vote():
+    """Speichert eine Abstimmung gegen einen Spieler."""
+    data = request.json
+    player_id = data.get("player_id")
+
+    if not player_id:
+        return jsonify({"error": "Kein Spieler ausgewählt"}), 400
+
+    with get_db_connection() as conn:
+        # Spieler als "gelyncht" markieren
+        conn.execute("UPDATE players SET status = 'tot' WHERE id = ?", (player_id,))
+        conn.commit()
+
+    return jsonify({"message": f"Spieler {player_id} wurde gelyncht!"}), 200
+
 
 
 if __name__ == '__main__':

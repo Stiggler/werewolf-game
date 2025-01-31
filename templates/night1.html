@@ -698,7 +698,7 @@ function loadSeerPhase() {
 }
 
 
-        let phaseSwitched = false; // 🔥 Variable, um doppeltes Neuladen zu verhindern
+let phaseSwitched = false; // Verhindert doppelten Wechsel
 
 function updatePhaseDisplay() {
     fetch('/get_phase')
@@ -706,22 +706,50 @@ function updatePhaseDisplay() {
         .then(data => {
             document.getElementById('phaseDisplay').textContent = `Phase: ${data.phase} ${data.phase_number}`;
 
-            if (data.phase === "Tag" && !phaseSwitched) {
-                phaseSwitched = true; // ✅ Verhindert mehrfaches Neuladen
-                alert("🌞 Die Sonne geht auf, das Dorf erwacht!");
-                setTimeout(() => window.location.href = '/game', 1000); // 🔥 Geht zur nächsten Phase, statt endlos zu reloaden
+            if (data.phase === "Tag" && data.phase_number > 0 && !phaseSwitched) {
+                phaseSwitched = true;  // Verhindert Mehrfachwechsel
+                
+                // 🔥 Pop-up für den Tag-Nacht-Wechsel
+                let overlay = document.createElement("div");
+                overlay.id = "phaseOverlay";
+                overlay.style.position = "fixed";
+                overlay.style.top = "0";
+                overlay.style.left = "0";
+                overlay.style.width = "100vw";
+                overlay.style.height = "100vh";
+                overlay.style.backgroundColor = "rgba(0, 0, 0, 0.8)";
+                overlay.style.display = "flex";
+                overlay.style.justifyContent = "center";
+                overlay.style.alignItems = "center";
+                overlay.style.flexDirection = "column";
+                overlay.style.zIndex = "1000";
+
+                const message = document.createElement("h1");
+                message.style.color = "white";
+                message.style.fontSize = "3rem";
+                message.textContent = "🌞 Die Sonne geht auf, das Dorf erwacht!";
+
+                const confirmButton = document.createElement("button");
+                confirmButton.textContent = "Weiter zum Tag";
+                confirmButton.style.marginTop = "20px";
+                confirmButton.style.padding = "10px 20px";
+                confirmButton.style.fontSize = "1.5rem";
+                confirmButton.style.cursor = "pointer";
+                confirmButton.onclick = () => {
+                    document.body.removeChild(overlay);
+                    window.location.href = '/day'; // 🔥 Jetzt geht es zur day.html!
+                };
+
+                overlay.appendChild(message);
+                overlay.appendChild(confirmButton);
+                document.body.appendChild(overlay);
             }
         })
         .catch(error => console.error("Fehler beim Laden der Phase:", error));
 }
 
-// 🔥 Diese Funktion wird weiterhin alle 5 Sekunden aufgerufen
-document.addEventListener("DOMContentLoaded", () => {
-    updatePhaseDisplay();
-    setInterval(updatePhaseDisplay, 5000);
-});
-
-
+// Starte die Aktualisierung der Phase
+document.addEventListener("DOMContentLoaded", updatePhaseDisplay);
 
 
 

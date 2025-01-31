@@ -1,21 +1,182 @@
-function startNewDay() {
-    fetch('/start_day', { method: 'POST' })
-        .then(response => response.json())
-        .then(data => console.log("☀️ Neuer Tag gestartet:", data.message))
-        .catch(error => console.error("Fehler beim Starten des Tages:", error));
-}
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tag im Dorf</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            display: flex;
+        }
+        .left-panel, .right-panel {
+            height: 100vh;
+            overflow-y: auto;
+        }
+        .left-panel {
+            width: 30%;
+            background-color: #f4f4f4;
+            border-right: 1px solid #ccc;
+            padding: 10px;
+        }
+        .right-panel {
+            width: 70%;
+            padding: 10px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            border: 1px solid #ccc;
+            padding: 10px;
+            text-align: center;
+        }
+        th {
+            background-color: #f4f4f4;
+        }
+        img {
+            width: 50px;
+            height: 50px;
+            border-radius: 5px;
+        }
+        .interactive-phase {
+            display: none;
+            text-align: center;
+            margin-top: 20px;
+        }
+        .interactive-phase.active {
+            display: block;
+        }
+        td div {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        td div img {
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
 
-// 🔥 Diese Funktion wird NUR aufgerufen, wenn der Tag beginnt!
-function checkDayTransition() {
-    fetch('/get_phase')
-        .then(response => response.json())
-        .then(data => {
-            if (data.phase === "Tag") {
-                startNewDay();
-            }
-        })
-        .catch(error => console.error("Fehler beim Laden der Phase:", error));
-}
+    <h2 id="phaseDisplay" style="text-align: center; padding: 10px;">Lade Phase...</h2>
+    
+    <div class="left-panel">
+        <table id="playersTable">
+            <thead>
+                <tr>
+                    <th>Spieler</th>
+                    <th>Aktuelle Rolle</th>
+                    <th>Info</th>
+                    <th>Status</th>
+                    <th>Aktionen</th>
+                </tr>
+            </thead>
+            <tbody id="playersBody">
+                <!-- Spieler werden hier dynamisch eingefügt -->
+            </tbody>                       
+        </table>        
+    </div>
+    
+    <div class="right-panel">
+        <div id="interactivePhase" class="interactive-phase">
+            <h2 id="roleTitle">Bürgerentscheid</h2>
+            <div id="roleContent"></div>
+            <button onclick="completeAction()">Aktion abschließen</button>
+        </div>
+    </div>
+    
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            updatePhaseDisplay();
+            loadPlayers();
+            loadVotingPhase();
+        });
+        
+        function updatePhaseDisplay() {
+            fetch('/get_phase')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('phaseDisplay').textContent = `Phase: ${data.phase} ${data.phase_number}`;
+                })
+                .catch(error => console.error("Fehler beim Laden der Phase:", error));
+        }
 
-// Beim Laden der Tagesansicht ausführen
-document.addEventListener("DOMContentLoaded", checkDayTransition);
+        function loadPlayers() {
+            fetch('/players')
+                .then(response => response.json())
+                .then(players => {
+                    const tbody = document.getElementById('playersBody');
+                    tbody.innerHTML = '';
+                    
+                    players.forEach(player => {
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = `
+                            <td>
+                                <div style="position: relative; display: inline-block;">
+                                    <img src="${player.image}" alt="${player.name}" width="50">
+                                    <span>${player.name}</span>
+                                </div>
+                            </td>
+                            <td>
+                                <div>
+                                    <img src="/static/rollen/${player.current_role ? player.current_role.toLowerCase().replace(' ', '_') : 'default'}.png" 
+                                         alt="${player.current_role || 'Keine Rolle'}" width="50">
+                                    <span>${player.current_role || 'Keine Rolle'}</span>
+                                </div>
+                            </td>
+                            <td>${player.status}</td>
+                            <td>
+                                <button onclick="voteForPlayer(${player.id})">Stimmen</button>
+                            </td>
+                        `;
+                        tbody.appendChild(tr);
+                    });
+                })
+                .catch(error => console.error("Fehler beim Laden der Spieler:", error));
+        }
+
+        function loadVotingPhase() {
+            fetch('/living_players')
+                .then(response => response.json())
+                .then(players => {
+                    const roleContentDiv = document.getElementById('roleContent');
+                    roleContentDiv.innerHTML = '<h3>🗳️ Wähle einen Spieler</h3>';
+                    
+                    players.forEach(player => {
+                        const button = document.createElement("button");
+                        button.textContent = player.name;
+                        button.style.display = "block";
+                        button.style.margin = "5px";
+                        button.style.padding = "10px";
+                        button.style.fontSize = "1.2rem";
+                        button.onclick = () => voteForPlayer(player.id);
+                        roleContentDiv.appendChild(button);
+                    });
+                })
+                .catch(error => console.error("Fehler beim Laden der Spieler:", error));
+        }
+
+        function voteForPlayer(playerId) {
+            fetch('/vote', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ player_id: playerId })
+            })
+            .then(response => response.json())
+            .then(data => {
+                alert(data.message);
+                location.reload();
+            })
+            .catch(error => console.error("Fehler bei der Abstimmung:", error));
+        }
+
+        function completeAction() {
+            alert('Die Abstimmung ist beendet!');
+            location.reload();
+        }
+    </script>
+</body>
+</html>
